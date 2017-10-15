@@ -7,11 +7,12 @@ app = Flask(__name__)
 # This needs to be filled with the Page Access Token that will be provided
 # by the Facebook App that will be created.
 PAT = 'EAABxbRfQPaUBACGzDsUxXidpFSfZAz96jBTY8mcz1fCTbSL7fNkyNxDRJjB2tKpTZCKrwglBCpqz4j4OMpObkbMsqxIsvxNwAxtyXZCF8Q4X1nNUsknAYkwP79domsnsO3a9g0ZBZCuz4GzWy6HtZCq0phQ7nyIF5Dwl1vuLr6ngZDZD'
+VERIF_TOKEN = 'test_token'
 
 @app.route('/', methods=['GET'])
 def handle_verification():
   print "Handling Verification."
-  if request.args.get('hub.verify_token', '') == 'test_token':
+  if request.args.get('hub.verify_token', '') == VERIF_TOKEN:
     print "Verification successful!"
     return request.args.get('hub.challenge', '')
   else:
@@ -44,12 +45,12 @@ def messaging_events(payload):
 def send_message(token, recipient, text):
   """Send the message text to recipient with id recipient.
   """
-
+  msg_text = "STUDYBOT: " + text.decode('unicode_escape')
   r = requests.post("https://graph.facebook.com/v2.6/me/messages",
     params={"access_token": token},
     data=json.dumps({
       "recipient": {"id": recipient},
-      "message": {"text": text.decode('unicode_escape')}
+      "message": {"text": msg_text}
     }),
     headers={'Content-type': 'application/json'})
   if r.status_code != requests.codes.ok:
