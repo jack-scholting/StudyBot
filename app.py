@@ -1,8 +1,11 @@
 from flask import Flask, request
+from flask.ext.sqlalchemy import SQLAlchemy
 import json
 import requests
 
 app = Flask(__name__)
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ['DATABASE_URL']
+db = SQLAlchemy(app)
 
 # This needs to be filled with the Page Access Token that will be provided
 # by the Facebook App that will be created.
