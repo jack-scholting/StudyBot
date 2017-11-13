@@ -50,7 +50,10 @@ def handle_messages():
   print payload
   for sender, message in messaging_events(payload):
     print "Incoming from %s: %s" % (sender, message)
-    send_message(PAT, sender, message)
+    if (is_first_time_user(sender)):
+        send_welcome_message(PAT, sender)
+    else:
+        send_message(PAT, sender, message)
   return "ok"
 
 #===============================================================================
@@ -70,34 +73,44 @@ def messaging_events(payload):
       yield event["sender"]["id"], "I can't echo this"
 
 
-def send_message(token, recipient, text):
-  """Send the message text to recipient with id recipient.
-  """
-  firstname = get_users_firstname(recipient, token)
-  msg_text = "STUDYBOT ECHO: Hello " +firstname+" :" + text.decode('unicode_escape')
+def send_message(token, user_id, text):
+    """Send the message text to recipient with id recipient.
+    """
+    firstname = get_users_firstname(token, user_id)
+    msg_text = "STUDYBOT ECHO: Hello " +firstname+" :" + text.decode('unicode_escape')
 
-  # Send a POST to Facebook's Graph API.
-  r = requests.post("https://graph.facebook.com/v2.6/me/messages",
-    params={"access_token": token}, # This is the PAT.
-    data=json.dumps({
-      "recipient": {"id": recipient}, # What ID is this?
-      "message": {"text": msg_text}
-    }),
-    headers={'Content-type': 'application/json'})
+    # Send a POST to Facebook's Graph API.
+    r = requests.post("https://graph.facebook.com/v2.6/me/messages",
+        params={"access_token": token}, # This is the PAT.
+        data=json.dumps({
+        "recipient": {"id": user_id},
+        "message": {"text": msg_text}
+        }),
+        headers={'Content-type': 'application/json'})
 
-  # Check the returned status code of the POST.
-  if r.status_code != requests.codes.ok:
-    print r.text
+    # Check the returned status code of the POST.
+    if r.status_code != requests.codes.ok:
+        print r.text
 
 """
 Explaination at https://developers.facebook.com/docs/messenger-platform/identity/user-profile
 """
-def get_users_firstname(recipient, token):
+def get_users_firstname(token, user_id):
     r = requests.get("https://graph.facebook.com/v2.6/"+str(recipient),
             params={"access_token" : token,
                     "fields" : "first_name"})
     json_response = json.loads(r.text)
     return (json_response["first_name"])
+
+def is_first_time_user(sender):
+    #TODO Check database for user.
+    return (True)
+
+def send_welcome_message(token, user_id):
+    firstname = get_users_firstname(token, user_id)
+    msg = "Hello "+firstname+", I'm StudyBot. Nice to meet you!"
+    send_message(token, user_id, msg)
+
 
 #===============================================================================
 # Main
