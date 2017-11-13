@@ -96,7 +96,7 @@ def send_message(token, user_id, text):
 Explaination at https://developers.facebook.com/docs/messenger-platform/identity/user-profile
 """
 def get_users_firstname(token, user_id):
-    r = requests.get("https://graph.facebook.com/v2.6/"+str(recipient),
+    r = requests.get("https://graph.facebook.com/v2.6/"+str(user_id),
             params={"access_token" : token,
                     "fields" : "first_name"})
     json_response = json.loads(r.text)
