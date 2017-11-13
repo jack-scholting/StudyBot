@@ -50,10 +50,14 @@ def handle_messages():
   print payload
   for sender, message in messaging_events(payload):
     print "Incoming from %s: %s" % (sender, message)
+
     if (is_first_time_user(sender)):
         send_welcome_message(PAT, sender)
     else:
-        send_message(PAT, sender, message)
+        firstname = get_users_firstname(token, user_id)
+        msg_text = "Hello " +firstname+" :" + message.decode('unicode_escape')
+        send_message(PAT, sender, msg_text)
+
   return "ok"
 
 #===============================================================================
@@ -73,12 +77,10 @@ def messaging_events(payload):
       yield event["sender"]["id"], "I can't echo this"
 
 
-def send_message(token, user_id, text):
-    """Send the message text to recipient with id recipient.
+def send_message(token, user_id, msg_text):
     """
-    firstname = get_users_firstname(token, user_id)
-    msg_text = "STUDYBOT ECHO: Hello " +firstname+" :" + text.decode('unicode_escape')
-
+    Send the message msg_text to recipient.
+    """
     # Send a POST to Facebook's Graph API.
     r = requests.post("https://graph.facebook.com/v2.6/me/messages",
         params={"access_token": token}, # This is the PAT.
@@ -110,6 +112,7 @@ def send_welcome_message(token, user_id):
     firstname = get_users_firstname(token, user_id)
     msg = "Hello "+firstname+", I'm StudyBot. Nice to meet you!"
     send_message(token, user_id, msg)
+    #TODO Add instructions for the user.
 
 
 #===============================================================================
