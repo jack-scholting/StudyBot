@@ -56,7 +56,7 @@ def handle_messages():
                     if (messaging_event.get("message")):
                         sender_id = messaging_event["sender"]["id"]
                         message = messaging_event["message"]["text"]
-                        print ("Incoming from %s: %s" % (sender_id, msg_text))
+                        print ("Incoming from %s: %s" % (sender_id, message))
 
                         if (is_first_time_user(sender_id)):
                             send_welcome_message(sender_id)
