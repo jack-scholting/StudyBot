@@ -30,13 +30,13 @@ setup in the facebook app.
 """
 @app.route('/', methods=['GET'])
 def handle_verification():
-  print "Handling Verification."
-  if request.args.get('hub.verify_token', '') == VERIF_TOKEN:
-    print "Verification successful!"
-    return request.args.get('hub.challenge', '')
-  else:
-    print "Verification failed!"
-    return 'Error, wrong validation token'
+    print "Handling Verification."
+    if request.args.get('hub.verify_token', '') == VERIF_TOKEN:
+        print "Verification successful!"
+        return request.args.get('hub.challenge', '')
+    else:
+        print "Verification failed!"
+        return 'Error, wrong validation token'
 
 """
 POST requests are for communication.
@@ -45,36 +45,39 @@ appropriate response.
 """
 @app.route('/', methods=['POST'])
 def handle_messages():
-  print "Handling Messages"
-  payload = request.get_data()
-  print payload
-  for sender_id, message in messaging_events(payload):
-    print "Incoming from %s: %s" % (sender_id, message)
+    print "Handling Messages"
+    payload = request.get_json()
+    print payload
 
-    if (is_first_time_user(sender_id)):
-        send_welcome_message(sender_id)
-    else:
-        firstname = get_users_firstname(sender_id)
-        msg_text = "Hello " +firstname+" : " + message.decode('unicode_escape')
-        send_message(sender_id, msg_text)
+    # for sender_id, message in messaging_events(payload):
+        # print "Incoming from %s: %s" % (sender_id, message)
 
-  return "ok"
+        # if (is_first_time_user(sender_id)):
+            # send_welcome_message(sender_id)
+
+        # firstname = get_users_firstname(sender_id)
+        # msg_text = "Hello " +firstname+" : " + message.decode('unicode_escape')
+        # send_message(sender_id, msg_text)
+
+    return "ok"
+
+#{"object":"page","entry":[{"id":"601541080185276","time":1510540428610,"messaging":[{"sender":{"id":"1778507745603521"},"recipient":{"id":"601541080185276"},"timestamp":1510540427576,"message":{"mid":"mid.$cAAIjGS-LkRZl5H8JOFfsznCC7186","seq":8657,"text":"Hello there handsome!","nlp":{"entities":{"greetings":[{"confidence":0.99972563983248,"value":"true"}]}}}}]}]}
 
 #===============================================================================
 # Helper Routines
 #===============================================================================
 def messaging_events(payload):
-  """
-  This function is a python iterator.
-  It generate tuples of (sender_id, message_text) from the provided payload.
-  """
-  data = json.loads(payload)
-  messaging_events = data["entry"][0]["messaging"]
-  for event in messaging_events:
-    if "message" in event and "text" in event["message"]:
-      yield event["sender"]["id"], event["message"]["text"].encode('unicode_escape')
-    else:
-      yield event["sender"]["id"], "I can't echo this"
+    """
+    This function is a python iterator.
+    It generate tuples of (sender_id, message_text) from the provided payload.
+    """
+    data = json.loads(payload)
+    messaging_events = data["entry"][0]["messaging"]
+    for event in messaging_events:
+        if "message" in event and "text" in event["message"]:
+            yield event["sender"]["id"], event["message"]["text"].encode('unicode_escape')
+        else:
+            yield event["sender"]["id"], "I can't echo this"
 
 
 def send_message(user_id, msg_text):
@@ -119,7 +122,7 @@ def send_welcome_message(user_id):
 # Main
 #===============================================================================
 if __name__ == '__main__':
-  """
-  Start the Flask app, the app will start listening for requests on port 5000.
-  """
-  app.run()
+    """
+    Start the Flask app, the app will start listening for requests on port 5000.
+    """
+    app.run()
