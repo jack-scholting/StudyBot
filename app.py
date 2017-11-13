@@ -2,13 +2,32 @@ from flask import Flask, request
 import json
 import requests
 
+# Create the Flask application instance.
 app = Flask(__name__)
 
-# This needs to be filled with the Page Access Token that will be provided
-# by the Facebook App that will be created.
+#===============================================================================
+# Global Data
+#===============================================================================
+"""
+This PAT (Page Access Token) is used to authenticate our requests/responses.
+It was generated during the setup of our Facebook page and Facebook app.
+"""
 PAT = 'EAABxbRfQPaUBACGzDsUxXidpFSfZAz96jBTY8mcz1fCTbSL7fNkyNxDRJjB2tKpTZCKrwglBCpqz4j4OMpObkbMsqxIsvxNwAxtyXZCF8Q4X1nNUsknAYkwP79domsnsO3a9g0ZBZCuz4GzWy6HtZCq0phQ7nyIF5Dwl1vuLr6ngZDZD'
+
+"""
+This is a secret token we provide Facebook so we can verify the request is
+actually coming from Facebook.
+"""
 VERIF_TOKEN = 'test_token'
 
+#===============================================================================
+# Flask Routines
+#===============================================================================
+"""
+GET requests are used for authentication.
+Handle GET requests by verifying Facebook is sending the correct token that we
+setup in the facebook app.
+"""
 @app.route('/', methods=['GET'])
 def handle_verification():
   print "Handling Verification."
@@ -19,6 +38,11 @@ def handle_verification():
     print "Verification failed!"
     return 'Error, wrong validation token'
 
+"""
+POST requests are for communication.
+Handle POST requests by interpretting the user message, then sending the
+appropriate response.
+"""
 @app.route('/', methods=['POST'])
 def handle_messages():
   print "Handling Messages"
@@ -29,9 +53,13 @@ def handle_messages():
     send_message(PAT, sender, message)
   return "ok"
 
+#===============================================================================
+# Helper Routines
+#===============================================================================
 def messaging_events(payload):
-  """Generate tuples of (sender_id, message_text) from the
-  provided payload.
+  """
+  This function is a python iterator.
+  It generate tuples of (sender_id, message_text) from the provided payload.
   """
   data = json.loads(payload)
   messaging_events = data["entry"][0]["messaging"]
@@ -45,16 +73,37 @@ def messaging_events(payload):
 def send_message(token, recipient, text):
   """Send the message text to recipient with id recipient.
   """
-  msg_text = "STUDYBOT ECHO: " + text.decode('unicode_escape')
+  firstname = get_users_firstname(recipient, token)
+  msg_text = "STUDYBOT ECHO: Hello " +firstname+" :" + text.decode('unicode_escape')
+
+  # Send a POST to Facebook's Graph API.
   r = requests.post("https://graph.facebook.com/v2.6/me/messages",
-    params={"access_token": token},
+    params={"access_token": token}, # This is the PAT.
     data=json.dumps({
-      "recipient": {"id": recipient},
+      "recipient": {"id": recipient}, # What ID is this?
       "message": {"text": msg_text}
     }),
     headers={'Content-type': 'application/json'})
+
+  # Check the returned status code of the POST.
   if r.status_code != requests.codes.ok:
     print r.text
 
+"""
+Explaination at https://developers.facebook.com/docs/messenger-platform/identity/user-profile
+"""
+def get_users_firstname(recipient, token):
+    r = requests.get("https://graph.facebook.com/v2.6/"+str(recipient),
+            params={"access_token" : token,
+                    "fields" : "first_name"})
+    json_response = json.loads(r.text)
+    return (json_response["first_name"])
+
+#===============================================================================
+# Main
+#===============================================================================
 if __name__ == '__main__':
+  """
+  Start the Flask app, the app will start listening for requests on port 5000.
+  """
   app.run()
