@@ -49,37 +49,33 @@ def handle_messages():
     payload = request.get_json()
     print payload
 
-    # for sender_id, message in messaging_events(payload):
-        # print "Incoming from %s: %s" % (sender_id, message)
+    if (payload):
+        if (payload.get("object") == "page"):
+            for entry in payload["entry"]:
+                for messaging_event in entry["messaging"]:
+                    if (messaging_event.get("message")):
+                        sender_id = messaging_event["sender"]["id"]
+                        message = messaging_event["message"]["text"]
+                        print ("Incoming from %s: %s" % (sender_id, msg_text))
 
-        # if (is_first_time_user(sender_id)):
-            # send_welcome_message(sender_id)
+                        if (is_first_time_user(sender_id)):
+                            send_welcome_message(sender_id)
 
-        # firstname = get_users_firstname(sender_id)
-        # msg_text = "Hello " +firstname+" : " + message.decode('unicode_escape')
-        # send_message(sender_id, msg_text)
+                        firstname = get_users_firstname(sender_id)
+                        msg_text = "Hello " +firstname+" : " + message.decode('unicode_escape')
+                        send_message(sender_id, msg_text)
+        else:
+            print("Error: Object is not a page.")
+    else:
+        print("Error: POST payload was empty.")
 
-    return "ok"
+    return ("ok", 200)
 
 #{"object":"page","entry":[{"id":"601541080185276","time":1510540428610,"messaging":[{"sender":{"id":"1778507745603521"},"recipient":{"id":"601541080185276"},"timestamp":1510540427576,"message":{"mid":"mid.$cAAIjGS-LkRZl5H8JOFfsznCC7186","seq":8657,"text":"Hello there handsome!","nlp":{"entities":{"greetings":[{"confidence":0.99972563983248,"value":"true"}]}}}}]}]}
 
 #===============================================================================
 # Helper Routines
 #===============================================================================
-def messaging_events(payload):
-    """
-    This function is a python iterator.
-    It generate tuples of (sender_id, message_text) from the provided payload.
-    """
-    data = json.loads(payload)
-    messaging_events = data["entry"][0]["messaging"]
-    for event in messaging_events:
-        if "message" in event and "text" in event["message"]:
-            yield event["sender"]["id"], event["message"]["text"].encode('unicode_escape')
-        else:
-            yield event["sender"]["id"], "I can't echo this"
-
-
 def send_message(user_id, msg_text):
     """
     Send the message msg_text to recipient.
