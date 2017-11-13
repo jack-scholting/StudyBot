@@ -55,7 +55,7 @@ def handle_messages():
         send_welcome_message(PAT, sender)
     else:
         firstname = get_users_firstname(token, user_id)
-        msg_text = "Hello " +firstname+" :" + message.decode('unicode_escape')
+        msg_text = "Hello " +firstname+" : " + message.decode('unicode_escape')
         send_message(PAT, sender, msg_text)
 
   return "ok"
@@ -106,7 +106,7 @@ def get_users_firstname(token, user_id):
 
 def is_first_time_user(sender):
     #TODO Check database for user.
-    return (True)
+    return (False)
 
 def send_welcome_message(token, user_id):
     firstname = get_users_firstname(token, user_id)
