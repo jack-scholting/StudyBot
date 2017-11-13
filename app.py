@@ -48,15 +48,15 @@ def handle_messages():
   print "Handling Messages"
   payload = request.get_data()
   print payload
-  for sender, message in messaging_events(payload):
-    print "Incoming from %s: %s" % (sender, message)
+  for sender_id, message in messaging_events(payload):
+    print "Incoming from %s: %s" % (sender_id, message)
 
-    if (is_first_time_user(sender)):
-        send_welcome_message(PAT, sender)
+    if (is_first_time_user(sender_id)):
+        send_welcome_message(sender_id)
     else:
-        firstname = get_users_firstname(token, user_id)
+        firstname = get_users_firstname(sender_id)
         msg_text = "Hello " +firstname+" : " + message.decode('unicode_escape')
-        send_message(PAT, sender, msg_text)
+        send_message(sender_id, msg_text)
 
   return "ok"
 
@@ -77,13 +77,13 @@ def messaging_events(payload):
       yield event["sender"]["id"], "I can't echo this"
 
 
-def send_message(token, user_id, msg_text):
+def send_message(user_id, msg_text):
     """
     Send the message msg_text to recipient.
     """
     # Send a POST to Facebook's Graph API.
     r = requests.post("https://graph.facebook.com/v2.6/me/messages",
-        params={"access_token": token}, # This is the PAT.
+        params={"access_token": PAT},
         data=json.dumps({
         "recipient": {"id": user_id},
         "message": {"text": msg_text}
@@ -97,21 +97,21 @@ def send_message(token, user_id, msg_text):
 """
 Explaination at https://developers.facebook.com/docs/messenger-platform/identity/user-profile
 """
-def get_users_firstname(token, user_id):
+def get_users_firstname(user_id):
     r = requests.get("https://graph.facebook.com/v2.6/"+str(user_id),
-            params={"access_token" : token,
+            params={"access_token" : PAT,
                     "fields" : "first_name"})
     json_response = json.loads(r.text)
     return (json_response["first_name"])
 
-def is_first_time_user(sender):
+def is_first_time_user(user_id):
     #TODO Check database for user.
     return (False)
 
-def send_welcome_message(token, user_id):
-    firstname = get_users_firstname(token, user_id)
+def send_welcome_message(user_id):
+    firstname = get_users_firstname(user_id)
     msg = "Hello "+firstname+", I'm StudyBot. Nice to meet you!"
-    send_message(token, user_id, msg)
+    send_message(user_id, msg)
     #TODO Add instructions for the user.
 
 
