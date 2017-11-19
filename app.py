@@ -94,7 +94,7 @@ def handle_messages():
 #===============================================================================
 # Helper Routines
 #===============================================================================
-def change_typing_indicator(enabled=True, user_id):
+def change_typing_indicator(enabled, user_id):
     if(enabled):
         action = "typing_on"
     else:
