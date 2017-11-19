@@ -48,7 +48,7 @@ appropriate response.
 def handle_messages():
     print("DEBUG: Handling Messages")
     payload = request.get_json()
-    print("DEBUG: " + payload)
+    print(payload)
 
     """
     Note: For more information on what is being processed here, see the webhook
