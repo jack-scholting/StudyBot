@@ -69,7 +69,7 @@ def handle_messages():
                         nlp = messaging_event["message"]["nlp"]
                         print("DEBUG: Incoming from %s: %s" % (sender_id, message))
 
-                        enable_typing_indicator()
+                        change_typing_indicator(enabled=True, sender_id)
 
                         #TODO - refactor to follow guidance from https://developers.facebook.com/docs/messenger-platform/discovery/welcome-screen
                         if (is_first_time_user(sender_id)):
@@ -79,7 +79,7 @@ def handle_messages():
                         msg_text = "Hello " +firstname+" : " + message.decode('unicode_escape')
                         send_message(sender_id, msg_text)
 
-                        disable_typing_indicator()
+                        change_typing_indicator(enabled=False, sender_id)
         else:
             print("DEBUG: Error: Object is not a page.")
     else:
@@ -96,27 +96,18 @@ def handle_messages():
 #===============================================================================
 # Helper Routines
 #===============================================================================
-def enable_typing_indicator():
+def change_typing_indicator(enabled=True, user_id):
+    if(enabled):
+        action = "typing_on"
+    else:
+        action = "typing_off"
+
     # Send a POST to Facebook's Graph API.
     r = requests.post("https://graph.facebook.com/v2.6/me/messages",
         params={"access_token": PAT},
         data=json.dumps({
         "recipient": {"id": user_id},
-        "sender_action": "typing_on"
-        }),
-        headers={'Content-type': 'application/json'})
-
-    # Check the returned status code of the POST.
-    if r.status_code != requests.codes.ok:
-        print("DEBUG: " + r.text)
-
-def disable_typing_indicator():
-    # Send a POST to Facebook's Graph API.
-    r = requests.post("https://graph.facebook.com/v2.6/me/messages",
-        params={"access_token": PAT},
-        data=json.dumps({
-        "recipient": {"id": user_id},
-        "sender_action": "typing_off"
+        "sender_action": action
         }),
         headers={'Content-type': 'application/json'})
 
