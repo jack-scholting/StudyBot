@@ -1,6 +1,7 @@
 from flask import Flask, request
 import json
 import requests
+import os
 
 # Create the Flask application instance.
 app = Flask(__name__)
@@ -8,18 +9,6 @@ app = Flask(__name__)
 #===============================================================================
 # Global Data
 #===============================================================================
-"""
-This PAT (Page Access Token) is used to authenticate our requests/responses.
-It was generated during the setup of our Facebook page and Facebook app.
-"""
-#TODO - this is not secure, since it is hardcoded and published to Github. We need to convert this into an environment variable.
-PAT = 'EAABxbRfQPaUBACGzDsUxXidpFSfZAz96jBTY8mcz1fCTbSL7fNkyNxDRJjB2tKpTZCKrwglBCpqz4j4OMpObkbMsqxIsvxNwAxtyXZCF8Q4X1nNUsknAYkwP79domsnsO3a9g0ZBZCuz4GzWy6HtZCq0phQ7nyIF5Dwl1vuLr6ngZDZD'
-
-"""
-This is a secret token we provide Facebook so we can verify the request is
-actually coming from Facebook.
-"""
-VERIF_TOKEN = 'test_token'
 
 #===============================================================================
 # Flask Routines
@@ -32,7 +21,7 @@ setup in the facebook app.
 @app.route('/', methods=['GET'])
 def handle_verification():
     print("DEBUG: Handling Verification.")
-    if request.args.get('hub.verify_token', '') == VERIF_TOKEN:
+    if request.args.get('hub.verify_token', '') == get_verif_token():
         print("DEBUG: Verification successful!")
         return request.args.get('hub.challenge', '')
     else:
@@ -57,8 +46,14 @@ def handle_messages():
     if (payload):
         # The webhook event should only be coming from a Page subscription.
         if (payload.get("object") == "page"):
+            # The "entry" is an array and could contain multiple webhook events.
             for entry in payload["entry"]:
+                # The "messaging" event occurs when a message is sent to our page.
                 for messaging_event in entry["messaging"]:
+                    if (messaging_event.get("postback")):
+                        #TODO
+                        pass
+
                     if (messaging_event.get("message")):
                         """
                         Note: The ID is a page-scoped ID (PSID). It is a unique
@@ -75,13 +70,19 @@ def handle_messages():
                         if (is_first_time_user(sender_id)):
                             send_welcome_message(sender_id)
 
+                        for nlp_entity in nlp["entities"]:
+                            #TODO
+                            pass
+
+                        #TODO we will need to add some handling for modes, for conversation flows.
+
                         firstname = get_users_firstname(sender_id)
                         msg_text = "Hello " +firstname+" : " + message.decode('unicode_escape')
                         send_message(sender_id, msg_text)
 
                         change_typing_indicator(enabled=False, user_id=sender_id)
         else:
-            print("DEBUG: Error: Object is not a page.")
+            print("DEBUG: Error: Event object is not a page.")
     else:
         print("DEBUG: Error: POST payload was empty.")
 
@@ -94,20 +95,45 @@ def handle_messages():
 #===============================================================================
 # Helper Routines
 #===============================================================================
+def get_verif_token():
+    """
+    This is a secret token we provide Facebook so we can verify the request is
+    actually coming from Facebook.
+    It was set in our Heroku environment using the following command:
+       heroku config:add VERIFY_TOKEN=your_token_here
+    """
+    return(os.environ["VERIFY_TOKEN"])
+
+def get_page_access_token():
+    """
+    This PAT (Page Access Token) is used to authenticate our requests/responses.
+    It was generated during the setup of our Facebook page and Facebook app.
+    It was set in our Heroku environment using the following command:
+       heroku config:add PAGE_ACCESS_TOKEN=your_token_here
+    """
+    return(os.environ["PAGE_ACCESS_TOKEN"])
+
 def change_typing_indicator(enabled, user_id):
     if(enabled):
         action = "typing_on"
     else:
         action = "typing_off"
 
-    # Send a POST to Facebook's Graph API.
-    r = requests.post("https://graph.facebook.com/v2.6/me/messages",
-        params={"access_token": PAT},
-        data=json.dumps({
+    url = "https://graph.facebook.com/v2.6/me/messages"
+
+    headers = {
+        'Content-type': 'application/json'
+    }
+    params = {
+        "access_token": get_page_access_token()
+    }
+    data = json.dumps({
         "recipient": {"id": user_id},
         "sender_action": action
-        }),
-        headers={'Content-type': 'application/json'})
+    })
+
+    # Send a POST to Facebook's Graph API.
+    r = requests.post(url=url, params=params, data=data, headers=headers)
 
     # Check the returned status code of the POST.
     if r.status_code != requests.codes.ok:
@@ -117,14 +143,21 @@ def send_message(user_id, msg_text):
     """
     Send the message msg_text to recipient.
     """
-    # Send a POST to Facebook's Graph API.
-    r = requests.post("https://graph.facebook.com/v2.6/me/messages",
-        params={"access_token": PAT},
-        data=json.dumps({
+    url = "https://graph.facebook.com/v2.6/me/messages"
+
+    headers = {
+        'Content-type': 'application/json'
+    }
+    params = {
+        "access_token": get_page_access_token()
+    }
+    data = json.dumps({
         "recipient": {"id": user_id},
         "message": {"text": msg_text}
-        }),
-        headers={'Content-type': 'application/json'})
+    })
+
+    # Send a POST to Facebook's Graph API.
+    r = requests.post(url=url, params=params, data=data, headers=headers)
 
     # Check the returned status code of the POST.
     if r.status_code != requests.codes.ok:
@@ -134,9 +167,14 @@ def send_message(user_id, msg_text):
 Explaination at https://developers.facebook.com/docs/messenger-platform/identity/user-profile
 """
 def get_users_firstname(user_id):
-    r = requests.get("https://graph.facebook.com/v2.6/"+str(user_id),
-            params={"access_token" : PAT,
-                    "fields" : "first_name"})
+    url = "https://graph.facebook.com/v2.6/" + str(user_id)
+
+    params = {
+        "access_token": get_page_access_token(),
+        "fields" : "first_name"
+    }
+
+    r = requests.get(url=url, params=params)
     json_response = json.loads(r.text)
     return (json_response["first_name"])
 
