@@ -69,7 +69,7 @@ def handle_messages():
                         nlp = messaging_event["message"]["nlp"]
                         print("DEBUG: Incoming from %s: %s" % (sender_id, message))
 
-                        change_typing_indicator(enabled=True, sender_id)
+                        change_typing_indicator(enabled=True, user_id=sender_id)
 
                         #TODO - refactor to follow guidance from https://developers.facebook.com/docs/messenger-platform/discovery/welcome-screen
                         if (is_first_time_user(sender_id)):
@@ -79,7 +79,7 @@ def handle_messages():
                         msg_text = "Hello " +firstname+" : " + message.decode('unicode_escape')
                         send_message(sender_id, msg_text)
 
-                        change_typing_indicator(enabled=False, sender_id)
+                        change_typing_indicator(enabled=False, user_id=sender_id)
         else:
             print("DEBUG: Error: Object is not a page.")
     else:
@@ -90,8 +90,6 @@ def handle_messages():
     the webhook may be unsubscribed from the Messenger Platform.
     """
     return ("ok", 200)
-
-#{"object":"page","entry":[{"id":"601541080185276","time":1510540428610,"messaging":[{"sender":{"id":"1778507745603521"},"recipient":{"id":"601541080185276"},"timestamp":1510540427576,"message":{"mid":"mid.$cAAIjGS-LkRZl5H8JOFfsznCC7186","seq":8657,"text":"Hello there handsome!","nlp":{"entities":{"greetings":[{"confidence":0.99972563983248,"value":"true"}]}}}}]}]}
 
 #===============================================================================
 # Helper Routines
