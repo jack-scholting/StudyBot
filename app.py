@@ -9,6 +9,8 @@ app = Flask(__name__)
 #===============================================================================
 # Global Data
 #===============================================================================
+# See https://developers.facebook.com/docs/messenger-platform/reference/send-api
+SEND_API_URL = "https://graph.facebook.com/v2.6/me/messages"
 
 #===============================================================================
 # Flask Routines
@@ -51,7 +53,7 @@ def handle_messages():
                 # The "messaging" event occurs when a message is sent to our page.
                 for messaging_event in entry["messaging"]:
                     if (messaging_event.get("postback")):
-                        #TODO
+                        #TODO - handle welcome message.
                         pass
 
                     if (messaging_event.get("message")):
@@ -71,10 +73,12 @@ def handle_messages():
                             send_welcome_message(sender_id)
 
                         for nlp_entity in nlp["entities"]:
-                            #TODO
+                            #TODO - handle NLP data.
                             pass
 
                         #TODO we will need to add some handling for modes, for conversation flows.
+
+                        #TODO - consider adding a message type https://developers.facebook.com/docs/messenger-platform/send-messages/#messaging_types
 
                         firstname = get_users_firstname(sender_id)
                         msg_text = "Hello " +firstname+" : " + message.decode('unicode_escape')
@@ -119,8 +123,6 @@ def change_typing_indicator(enabled, user_id):
     else:
         action = "typing_off"
 
-    url = "https://graph.facebook.com/v2.6/me/messages"
-
     headers = {
         'Content-type': 'application/json'
     }
@@ -132,8 +134,7 @@ def change_typing_indicator(enabled, user_id):
         "sender_action": action
     })
 
-    # Send a POST to Facebook's Graph API.
-    r = requests.post(url=url, params=params, data=data, headers=headers)
+    r = requests.post(url=SEND_API_URL, params=params, data=data, headers=headers)
 
     # Check the returned status code of the POST.
     if r.status_code != requests.codes.ok:
@@ -143,8 +144,6 @@ def send_message(user_id, msg_text):
     """
     Send the message msg_text to recipient.
     """
-    url = "https://graph.facebook.com/v2.6/me/messages"
-
     headers = {
         'Content-type': 'application/json'
     }
@@ -156,8 +155,7 @@ def send_message(user_id, msg_text):
         "message": {"text": msg_text}
     })
 
-    # Send a POST to Facebook's Graph API.
-    r = requests.post(url=url, params=params, data=data, headers=headers)
+    r = requests.post(url=SEND_API_URL, params=params, data=data, headers=headers)
 
     # Check the returned status code of the POST.
     if r.status_code != requests.codes.ok:
