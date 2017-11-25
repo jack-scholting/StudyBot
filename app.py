@@ -1,12 +1,14 @@
 from flask import Flask, request
-from flask.ext.sqlalchemy import SQLAlchemy
+from flask_sqlalchemy import SQLAlchemy
 import json
 import requests
 import os
+import User
 
 # Create the Flask application instance.
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ['DATABASE_URL']
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
 #===============================================================================
@@ -73,6 +75,7 @@ def handle_messages():
 
                         #TODO - refactor to follow guidance from https://developers.facebook.com/docs/messenger-platform/discovery/welcome-screen
                         if (is_first_time_user(sender_id)):
+                            create_user(sender_id)
                             send_welcome_message(sender_id)
 
                         for nlp_entity in nlp["entities"]:
@@ -181,7 +184,8 @@ def get_users_firstname(user_id):
 
 def is_first_time_user(user_id):
     #TODO Check database for user.
-    return (False)
+    current_user = User.query.filter_by(fb_id=user_id).one_or_none()
+    return True if (current_user is None) else False
 
 def send_welcome_message(user_id):
     firstname = get_users_firstname(user_id)
@@ -189,7 +193,10 @@ def send_welcome_message(user_id):
     send_message(user_id, msg)
     #TODO Add instructions for the user.
 
-
+def create_user(user_id):
+    new_user = User(user_id)
+    db.session.add(new_user)
+    db.session.commit()
 #===============================================================================
 # Main
 #===============================================================================
