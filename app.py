@@ -1,4 +1,4 @@
-from flask import Flask, request
+from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 import json
@@ -10,6 +10,7 @@ app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ['DATABASE_URL']
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
+
 
 #===============================================================================
 # DB Classes
@@ -26,6 +27,22 @@ class User(db.Model):
     def __repr__(self):
         return '<FB ID %r>' % self.fb_id
 
+    @property
+    def serialize(self):
+        """Return object data in easily serializeable format"""
+        return {
+            'id': self.id,
+            'fb_id': self.fb_id,
+            'facts': self.serialize_one2many
+        }
+
+    @property
+    def serialize_one2many(self):
+       """
+       Return object's relations in easily serializeable format.
+       NB! Calls many2many's serialize property.
+       """
+       return [item.serialize for item in self.facts]
 
 class Fact(db.Model):
     __tablename__ = 'facts'
@@ -40,11 +57,26 @@ class Fact(db.Model):
     def __repr__(self):
         return '<FB ID - Fact: %r - %r>' % self.fb_id, self.fact
 
+    @property
+    def serialize(self):
+        """Return object data in easily serializeable format"""
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'fact': self.fact,
+            'last_seen': self.last_seen
+        }
+
 #===============================================================================
 # Global Data
 #===============================================================================
 # See https://developers.facebook.com/docs/messenger-platform/reference/send-api
 SEND_API_URL = "https://graph.facebook.com/v2.6/me/messages"
+RANDOM_PHRASES = [
+    "Hey %s, how the heck are ya? Me, you ask? I'm feeling a little blue. :)",
+    "Studying again %s? Look at you! We gotta future Rhodes scholar here!",
+    "You want to study right now, %s? Nerd Alert! Nerds are so in right now!"
+]
 
 #===============================================================================
 # Flask Routines
@@ -108,17 +140,23 @@ def handle_messages():
                             send_welcome_message(sender_id)
 
                         for nlp_entity in nlp["entities"]:
+                            if nlp_entity == 'greeting':
+                                send_greeting_message(sender_id)
+
+                            elif nlp_entity == 'greeting':
+                                firstname = get_users_firstname(sender_id)
+                                msg_text = "Hello " + firstname + " : " + message.decode('unicode_escape')
+                                send_message(sender_id, msg_text)
+
                             #TODO - handle NLP data.
                             pass
 
                         #TODO we will need to add some handling for modes, for conversation flows.
 
                         #TODO - consider adding a message type https://developers.facebook.com/docs/messenger-platform/send-messages/#messaging_types
-
                         firstname = get_users_firstname(sender_id)
-                        msg_text = "Hello " +firstname+" : " + message.decode('unicode_escape')
+                        msg_text = "Hello " + firstname + " : " + message.decode('unicode_escape')
                         send_message(sender_id, msg_text)
-
                         change_typing_indicator(enabled=False, user_id=sender_id)
         else:
             print("DEBUG: Error: Event object is not a page.")
@@ -212,7 +250,6 @@ def get_users_firstname(user_id):
     return (json_response["first_name"])
 
 def is_first_time_user(user_id):
-    #TODO Check database for user.
     print("DEBUG: Checking if user %s exists", user_id)
     current_user = User.query.filter_by(fb_id=user_id).one_or_none()
     print("DEBUG: User %r", current_user)
@@ -224,9 +261,30 @@ def send_welcome_message(user_id):
     send_message(user_id, msg)
     #TODO Add instructions for the user.
 
+def send_greeting_message(user_id):
+    from random import randint
+    phrase = RANDOM_PHRASES[randint(0, len(RANDOM_PHRASES))]
+    msg = phrase % get_users_firstname(user_id)
+    send_message(user_id, msg)
+
 def create_user(user_id):
     new_user = User(fb_id=user_id)
     db.session.add(new_user)
+    db.session.commit()
+
+def create_new_fact(user_id, new_fact):
+    user = User.query.filter_by(fb_id=user_id)
+    new_fact_record = Fact(user_id=user.id, fact=new_fact)
+    db.session.add(new_fact_record)
+    db.session.commit()
+
+def get_user_facts(user_id):
+    return jsonify(user=[i.serialize for i in User.query.filter_by(fb_id=user_id)])
+
+def delete_fact(user_id, fact):
+    user = User.query.filter_by(fb_id=user_id)
+    fact_record = Fact(user_id=user.id, fact=fact)
+    db.session.delete(fact_record)
     db.session.commit()
 #===============================================================================
 # Main
