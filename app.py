@@ -1,14 +1,10 @@
 from flask import Flask, request
-from flask_sqlalchemy import SQLAlchemy
 import json
 import requests
 import os
 
 # Create the Flask application instance.
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ['DATABASE_URL']
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-db = SQLAlchemy(app)
 
 import User
 
@@ -197,7 +193,7 @@ def send_welcome_message(user_id):
     #TODO Add instructions for the user.
 
 def create_user(user_id):
-    new_user = User(user_id)
+    new_user = User(fb_id=user_id)
     db.session.add(new_user)
     db.session.commit()
 #===============================================================================
