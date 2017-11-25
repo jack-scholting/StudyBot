@@ -141,7 +141,7 @@ def handle_messages():
 
                         max_confidence = 0
                         for nlp_entity in nlp["entities"]:
-                            if max_confidence < nlp_entity.get("confidence"):
+                            if max_confidence < nlp_entity["confidence"]:
                                 current_intent = nlp_entity
                                 max_confidence = nlp_entity.confidence
 
