@@ -140,16 +140,16 @@ def handle_messages():
                             send_welcome_message(sender_id)
 
                         max_confidence = 0
-                        for nlp_entity in nlp["entities"]:
-                            if nlp_entity.get("confidence"):
-                                if max_confidence < nlp_entity.confidence:
-                                    current_intent = nlp_entity
-                                    max_confidence = nlp_entity.confidence
+                        for nlp_entity_key, nlp_entity_val in nlp["entities"]:
+                            if nlp_entity_val.get("confidence"):
+                                if max_confidence < nlp_entity_val.confidence:
+                                    current_intent = nlp_entity_key
+                                    max_confidence = nlp_entity_val.confidence
 
                         print("DEBUG: NLP Entity")
                         print(current_intent)
 
-                        if nlp_entity == 'greetings':
+                        if current_intent == 'greetings':
                           send_greeting_message(sender_id)
 
                         #TODO - handle NLP data.
