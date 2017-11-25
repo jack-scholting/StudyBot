@@ -140,13 +140,10 @@ def handle_messages():
                             send_welcome_message(sender_id)
 
                         for nlp_entity in nlp["entities"]:
+                            print("DEBUG: NLP Entity")
+                            print (nlp_entity)
                             if nlp_entity == 'greeting':
                                 send_greeting_message(sender_id)
-
-                            elif nlp_entity == 'greeting':
-                                firstname = get_users_firstname(sender_id)
-                                msg_text = "Hello " + firstname + " : " + message.decode('unicode_escape')
-                                send_message(sender_id, msg_text)
 
                             #TODO - handle NLP data.
                             pass
