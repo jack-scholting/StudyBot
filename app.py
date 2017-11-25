@@ -2,62 +2,199 @@ from flask import Flask, request
 from flask.ext.sqlalchemy import SQLAlchemy
 import json
 import requests
+import os
 
+# Create the Flask application instance.
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ['DATABASE_URL']
 db = SQLAlchemy(app)
 
-# This needs to be filled with the Page Access Token that will be provided
-# by the Facebook App that will be created.
-PAT = 'EAABxbRfQPaUBACGzDsUxXidpFSfZAz96jBTY8mcz1fCTbSL7fNkyNxDRJjB2tKpTZCKrwglBCpqz4j4OMpObkbMsqxIsvxNwAxtyXZCF8Q4X1nNUsknAYkwP79domsnsO3a9g0ZBZCuz4GzWy6HtZCq0phQ7nyIF5Dwl1vuLr6ngZDZD'
-VERIF_TOKEN = 'test_token'
+#===============================================================================
+# Global Data
+#===============================================================================
+# See https://developers.facebook.com/docs/messenger-platform/reference/send-api
+SEND_API_URL = "https://graph.facebook.com/v2.6/me/messages"
 
+#===============================================================================
+# Flask Routines
+#===============================================================================
+"""
+GET requests are used for authentication.
+Handle GET requests by verifying Facebook is sending the correct token that we
+setup in the facebook app.
+"""
 @app.route('/', methods=['GET'])
 def handle_verification():
-  print "Handling Verification."
-  if request.args.get('hub.verify_token', '') == VERIF_TOKEN:
-    print "Verification successful!"
-    return request.args.get('hub.challenge', '')
-  else:
-    print "Verification failed!"
-    return 'Error, wrong validation token'
+    print("DEBUG: Handling Verification.")
+    if request.args.get('hub.verify_token', '') == get_verif_token():
+        print("DEBUG: Verification successful!")
+        return request.args.get('hub.challenge', '')
+    else:
+        print("DEBUG: Verification failed!")
+        return 'Error, wrong validation token'
 
+"""
+POST requests are for communication.
+Handle POST requests by interpretting the user message, then sending the
+appropriate response.
+"""
 @app.route('/', methods=['POST'])
 def handle_messages():
-  print "Handling Messages"
-  payload = request.get_data()
-  print payload
-  for sender, message in messaging_events(payload):
-    print "Incoming from %s: %s" % (sender, message)
-    send_message(PAT, sender, message)
-  return "ok"
+    print("DEBUG: Handling Messages")
+    payload = request.get_json()
+    print(payload)
 
-def messaging_events(payload):
-  """Generate tuples of (sender_id, message_text) from the
-  provided payload.
-  """
-  data = json.loads(payload)
-  messaging_events = data["entry"][0]["messaging"]
-  for event in messaging_events:
-    if "message" in event and "text" in event["message"]:
-      yield event["sender"]["id"], event["message"]["text"].encode('unicode_escape')
+    """
+    Note: For more information on what is being processed here, see the webhook
+    documentation at https://developers.facebook.com/docs/messenger-platform/webhook
+    """
+    if (payload):
+        # The webhook event should only be coming from a Page subscription.
+        if (payload.get("object") == "page"):
+            # The "entry" is an array and could contain multiple webhook events.
+            for entry in payload["entry"]:
+                # The "messaging" event occurs when a message is sent to our page.
+                for messaging_event in entry["messaging"]:
+                    if (messaging_event.get("postback")):
+                        #TODO - handle welcome message.
+                        pass
+
+                    if (messaging_event.get("message")):
+                        """
+                        Note: The ID is a page-scoped ID (PSID). It is a unique
+                        identifier for a given person interacting with a given page.
+                        """
+                        sender_id = messaging_event["sender"]["id"]
+                        message = messaging_event["message"]["text"]
+                        nlp = messaging_event["message"]["nlp"]
+                        print("DEBUG: Incoming from %s: %s" % (sender_id, message))
+
+                        change_typing_indicator(enabled=True, user_id=sender_id)
+
+                        #TODO - refactor to follow guidance from https://developers.facebook.com/docs/messenger-platform/discovery/welcome-screen
+                        if (is_first_time_user(sender_id)):
+                            send_welcome_message(sender_id)
+
+                        for nlp_entity in nlp["entities"]:
+                            #TODO - handle NLP data.
+                            pass
+
+                        #TODO we will need to add some handling for modes, for conversation flows.
+
+                        #TODO - consider adding a message type https://developers.facebook.com/docs/messenger-platform/send-messages/#messaging_types
+
+                        firstname = get_users_firstname(sender_id)
+                        msg_text = "Hello " +firstname+" : " + message.decode('unicode_escape')
+                        send_message(sender_id, msg_text)
+
+                        change_typing_indicator(enabled=False, user_id=sender_id)
+        else:
+            print("DEBUG: Error: Event object is not a page.")
     else:
-      yield event["sender"]["id"], "I can't echo this"
+        print("DEBUG: Error: POST payload was empty.")
+
+    """
+    Per the documentation, the webhook should always return "200 OK", otherwise
+    the webhook may be unsubscribed from the Messenger Platform.
+    """
+    return ("ok", 200)
+
+#===============================================================================
+# Helper Routines
+#===============================================================================
+def get_verif_token():
+    """
+    This is a secret token we provide Facebook so we can verify the request is
+    actually coming from Facebook.
+    It was set in our Heroku environment using the following command:
+       heroku config:add VERIFY_TOKEN=your_token_here
+    """
+    return(os.environ["VERIFY_TOKEN"])
+
+def get_page_access_token():
+    """
+    This PAT (Page Access Token) is used to authenticate our requests/responses.
+    It was generated during the setup of our Facebook page and Facebook app.
+    It was set in our Heroku environment using the following command:
+       heroku config:add PAGE_ACCESS_TOKEN=your_token_here
+    """
+    return(os.environ["PAGE_ACCESS_TOKEN"])
+
+def change_typing_indicator(enabled, user_id):
+    if(enabled):
+        action = "typing_on"
+    else:
+        action = "typing_off"
+
+    headers = {
+        'Content-type': 'application/json'
+    }
+    params = {
+        "access_token": get_page_access_token()
+    }
+    data = json.dumps({
+        "recipient": {"id": user_id},
+        "sender_action": action
+    })
+
+    r = requests.post(url=SEND_API_URL, params=params, data=data, headers=headers)
+
+    # Check the returned status code of the POST.
+    if r.status_code != requests.codes.ok:
+        print("DEBUG: " + r.text)
+
+def send_message(user_id, msg_text):
+    """
+    Send the message msg_text to recipient.
+    """
+    headers = {
+        'Content-type': 'application/json'
+    }
+    params = {
+        "access_token": get_page_access_token()
+    }
+    data = json.dumps({
+        "recipient": {"id": user_id},
+        "message": {"text": msg_text}
+    })
+
+    r = requests.post(url=SEND_API_URL, params=params, data=data, headers=headers)
+
+    # Check the returned status code of the POST.
+    if r.status_code != requests.codes.ok:
+        print("DEBUG: " + r.text)
+
+"""
+Explaination at https://developers.facebook.com/docs/messenger-platform/identity/user-profile
+"""
+def get_users_firstname(user_id):
+    url = "https://graph.facebook.com/v2.6/" + str(user_id)
+
+    params = {
+        "access_token": get_page_access_token(),
+        "fields" : "first_name"
+    }
+
+    r = requests.get(url=url, params=params)
+    json_response = json.loads(r.text)
+    return (json_response["first_name"])
+
+def is_first_time_user(user_id):
+    #TODO Check database for user.
+    return (False)
+
+def send_welcome_message(user_id):
+    firstname = get_users_firstname(user_id)
+    msg = "Hello "+firstname+", I'm StudyBot. Nice to meet you!"
+    send_message(user_id, msg)
+    #TODO Add instructions for the user.
 
 
-def send_message(token, recipient, text):
-  """Send the message text to recipient with id recipient.
-  """
-  msg_text = "STUDYBOT ECHO: " + text.decode('unicode_escape')
-  r = requests.post("https://graph.facebook.com/v2.6/me/messages",
-    params={"access_token": token},
-    data=json.dumps({
-      "recipient": {"id": recipient},
-      "message": {"text": msg_text}
-    }),
-    headers={'Content-type': 'application/json'})
-  if r.status_code != requests.codes.ok:
-    print r.text
-
+#===============================================================================
+# Main
+#===============================================================================
 if __name__ == '__main__':
-  app.run()
+    """
+    Start the Flask app, the app will start listening for requests on port 5000.
+    """
+    app.run()
