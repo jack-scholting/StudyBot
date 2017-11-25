@@ -184,7 +184,9 @@ def get_users_firstname(user_id):
 
 def is_first_time_user(user_id):
     #TODO Check database for user.
+    print("DEBUG: Checking if user %s exists", user_id)
     current_user = User.query.filter_by(fb_id=user_id).one_or_none()
+    print("DEBUG: User %r", current_user)
     return True if (current_user is None) else False
 
 def send_welcome_message(user_id):
