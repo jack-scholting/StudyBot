@@ -139,14 +139,19 @@ def handle_messages():
                             create_user(sender_id)
                             send_welcome_message(sender_id)
 
+                        max_confidence = 0
                         for nlp_entity in nlp["entities"]:
-                            print("DEBUG: NLP Entity")
-                            print (nlp_entity)
-                            if nlp_entity == 'greeting':
-                                send_greeting_message(sender_id)
+                            if max_confidence < nlp_entity.get("confidence"):
+                                current_intent = nlp_entity
+                                max_confidence = nlp_entity.confidence
 
-                            #TODO - handle NLP data.
-                            pass
+                        print("DEBUG: NLP Entity")
+                        print(current_intent)
+
+                        if nlp_entity == 'greetings':
+                          send_greeting_message(sender_id)
+
+                        #TODO - handle NLP data.
 
                         #TODO we will need to add some handling for modes, for conversation flows.
 
