@@ -140,17 +140,18 @@ def handle_messages():
                             send_welcome_message(sender_id)
 
                         max_confidence = 0
-                        for nlp_entity_key, nlp_entity_val in nlp["entities"]:
-                            if nlp_entity_val.get("confidence"):
-                                if max_confidence < nlp_entity_val.confidence:
-                                    current_intent = nlp_entity_key
-                                    max_confidence = nlp_entity_val.confidence
+                        for nlp_entity in nlp["entities"]:
+                            nlp_payload = nlp["entities"][nlp_entity][0]
+                            if nlp_payload.get('confidence'):
+                                if max_confidence < nlp_payload.get('confidence'):
+                                    current_intent = nlp_entity
+                                    max_confidence = nlp_payload.get('confidence')
 
                         print("DEBUG: NLP Entity")
                         print(current_intent)
 
                         if current_intent == 'greetings':
-                          send_greeting_message(sender_id)
+                            send_greeting_message(sender_id)
 
                         #TODO - handle NLP data.
 
@@ -266,7 +267,7 @@ def send_welcome_message(user_id):
 
 def send_greeting_message(user_id):
     from random import randint
-    phrase = RANDOM_PHRASES[randint(0, len(RANDOM_PHRASES))]
+    phrase = RANDOM_PHRASES[randint(0, len(RANDOM_PHRASES)-1)]
     msg = phrase % get_users_firstname(user_id)
     send_message(user_id, msg)
 
