@@ -3,13 +3,14 @@ from flask_sqlalchemy import SQLAlchemy
 import json
 import requests
 import os
-import User
 
 # Create the Flask application instance.
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ['DATABASE_URL']
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
+
+import User
 
 #===============================================================================
 # Global Data
