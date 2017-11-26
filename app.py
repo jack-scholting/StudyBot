@@ -194,7 +194,7 @@ def msg_contains_greeting(nlp_entities, min_conf_threshold):
 
     return(return_val)
 
-def get_strongest_intent(nlp_entities, min_confidence_threshold):
+def get_strongest_intent(nlp_entities, min_conf_threshold):
     strongest_intent = "default_intent"
     highest_confidence_seen = min_conf_threshold
 
