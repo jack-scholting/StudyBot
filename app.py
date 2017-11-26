@@ -80,8 +80,7 @@ RANDOM_PHRASES = [
 ]
 
 """
-Note: This is a trade-off between "precision" and "recall"
-as discussed here:
+Note: This is a trade-off between "precision" and "recall" as discussed here:
 https://wit.ai/docs/recipes#which-confidence-threshold-should-i-use
 """
 MIN_CONFIDENCE_THRESHOLD = 0.6
@@ -137,9 +136,9 @@ def handle_messages():
                         identifier for a given person interacting with a given page.
                         """
                         sender_id = messaging_event["sender"]["id"]
-                        message = messaging_event["message"]["text"].encode('unicode_escape')
+                        sender_msg = messaging_event["message"]["text"].encode('unicode_escape')
                         nlp = messaging_event["message"]["nlp"]
-                        print("DEBUG: Incoming from %s: %s" % (sender_id, message))
+                        print("DEBUG: Incoming from %s: %s" % (sender_id, sender_msg))
 
                         change_typing_indicator(enabled=True, user_id=sender_id)
 
@@ -153,23 +152,28 @@ def handle_messages():
                         strongest_intent = get_strongest_intent(nlp["entities"], MIN_CONFIDENCE_THRESHOLD)
                         print("DEBUG: NLP intent: " + strongest_intent)
 
-                        if (strongest_intent == "default_intent"):
+                        bot_msg = ""
+                        if (strongest_intent == "add_fact"):
+                            #TODO - change state machine so the next reponse is processed correctly.
+                            bot_msg = "Ok, let's that new fact. What is the question?"
+                        elif (strongest_intent == "change_fact"):
+                            #TODO - display facts using some sort of interactive list.
+                            bot_msg = "Ok, which fact do you want to change?"
+                        elif (strongest_intent == "silence_studying"):
+                            #TODO - add NLP support for finding dates and times.
+                            bot_msg = "Ok, you want to silence study notifications until xx.\nIs that right?"
+                        elif (strongest_intent == "view_facts"):
+                            #TODO - display facts using some sort of interactive list.
+                            bot_msg = "Ok, here are the facts we have."
+                        elif (strongest_intent == "default_intent"):
+                            #TODO - provide user some suggested actions to help them.
+                            bot_msg = "I'm not sure what you mean."
                             pass
-                        elif (strongest_intent == "save_fact"):
-                            pass
-                        #TODO - handle additional intents
-
 
                         #TODO we will need to add some handling for modes, for conversation flows.
 
-                        #TODO - consider adding a message type based on what we are sending.
-                        #   https://developers.facebook.com/docs/messenger-platform/send-messages/#messaging_types
+                        send_message(sender_id, bot_msg, is_response=True)
 
-                        #TODO - temporary code, just echos the message.
-                        firstname = get_users_firstname(sender_id)
-                        msg_text = "Hello " + firstname + " : " + message
-
-                        send_message(sender_id, msg_text)
                         change_typing_indicator(enabled=False, user_id=sender_id)
         else:
             print("DEBUG: Error: Event object is not a page.")
@@ -248,10 +252,15 @@ def change_typing_indicator(enabled, user_id):
     if r.status_code != requests.codes.ok:
         print("DEBUG: " + r.text)
 
-def send_message(user_id, msg_text):
+def send_message(user_id, msg_text, is_response):
     """
     Send the message msg_text to recipient.
     """
+    if (is_response):
+        msg_type = "RESPONSE"
+    else:
+        msg_type = "NON_PROMOTIONAL_SUBSCRIPTION"
+
     headers = {
         'Content-type': 'application/json'
     }
@@ -259,6 +268,7 @@ def send_message(user_id, msg_text):
         "access_token": get_page_access_token()
     }
     data = json.dumps({
+        "message_type": msg_type,
         "recipient": {"id": user_id},
         "message": {"text": msg_text.decode('unicode_escape')}
     })
@@ -293,14 +303,14 @@ def is_first_time_user(user_id):
 def send_welcome_message(user_id):
     firstname = get_users_firstname(user_id)
     msg = "Hello "+firstname+", I'm StudyBot. Nice to meet you!"
-    send_message(user_id, msg)
+    send_message(user_id, msg, is_response=True)
     #TODO Add instructions for the user.
 
 def send_greeting_message(user_id):
     from random import randint
     phrase = RANDOM_PHRASES[randint(0, len(RANDOM_PHRASES)-1)]
     msg = phrase % get_users_firstname(user_id)
-    send_message(user_id, msg)
+    send_message(user_id, msg, is_response=True)
 
 def create_user(user_id):
     new_user = User(fb_id=user_id)
@@ -321,6 +331,7 @@ def delete_fact(user_id, fact):
     fact_record = Fact(user_id=user.id, fact=fact)
     db.session.delete(fact_record)
     db.session.commit()
+
 #===============================================================================
 # Main
 #===============================================================================
