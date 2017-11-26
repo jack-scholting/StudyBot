@@ -4,6 +4,7 @@ from datetime import datetime
 import json
 import requests
 import os
+import enum
 
 # Create the Flask application instance.
 app = Flask(__name__)
@@ -85,6 +86,13 @@ https://wit.ai/docs/recipes#which-confidence-threshold-should-i-use
 """
 MIN_CONFIDENCE_THRESHOLD = 0.6
 
+"""
+The following states are used to create a conversation flow.
+"""
+class State(enum.Enum):
+    DEFAULT = 0
+    WAITING_FOR_FACT_QUESTION = 1
+
 #===============================================================================
 # Flask Routines
 #===============================================================================
@@ -139,40 +147,45 @@ def handle_messages():
                         sender_msg = messaging_event["message"]["text"].encode('unicode_escape')
                         nlp = messaging_event["message"]["nlp"]
                         print("DEBUG: Incoming from %s: %s" % (sender_id, sender_msg))
+                        bot_msg = ""
 
                         change_typing_indicator(enabled=True, user_id=sender_id)
 
                         if (is_first_time_user(sender_id)):
                             create_user(sender_id)
                             send_welcome_message(sender_id)
+                            set_convo_state(sender_id, State.DEFAULT)
+                        else:
+                            convo_state = get_convo_state(sender_id)
 
-                        if (msg_contains_greeting(nlp["entities"], MIN_CONFIDENCE_THRESHOLD)):
-                            send_greeting_message(sender_id)
+                            if (convo_state == State.DEFAULT):
+                                if (msg_contains_greeting(nlp["entities"], MIN_CONFIDENCE_THRESHOLD)):
+                                    send_greeting_message(sender_id)
 
-                        strongest_intent = get_strongest_intent(nlp["entities"], MIN_CONFIDENCE_THRESHOLD)
-                        print("DEBUG: NLP intent: " + strongest_intent)
+                                strongest_intent = get_strongest_intent(nlp["entities"], MIN_CONFIDENCE_THRESHOLD)
+                                print("DEBUG: NLP intent: " + strongest_intent)
 
-                        bot_msg = ""
-                        if (strongest_intent == "add_fact"):
-                            #TODO - change state machine so the next reponse is processed correctly.
-                            bot_msg = "Ok, let's that new fact. What is the question?"
-                        elif (strongest_intent == "change_fact"):
-                            #TODO - display facts using some sort of interactive list.
-                            bot_msg = "Ok, which fact do you want to change?"
-                        elif (strongest_intent == "silence_studying"):
-                            #TODO - add NLP support for finding dates and times.
-                            bot_msg = "Ok, you want to silence study notifications until xx.\nIs that right?"
-                        elif (strongest_intent == "view_facts"):
-                            #TODO - display facts using some sort of interactive list.
-                            bot_msg = "Ok, here are the facts we have."
-                        elif (strongest_intent == "default_intent"):
-                            #TODO - provide user some suggested actions to help them.
-                            bot_msg = "I'm not sure what you mean."
-                            pass
+                                if (strongest_intent == "add_fact"):
+                                    #TODO - change state machine so the next reponse is processed correctly.
+                                    bot_msg = "Ok, let's that new fact. What is the question?"
+                                    set_convo_state(sender_id, State.WAITING_FOR_FACT_QUESTION)
+                                elif (strongest_intent == "change_fact"):
+                                    #TODO - display facts using some sort of interactive list.
+                                    bot_msg = "Ok, which fact do you want to change?"
+                                elif (strongest_intent == "silence_studying"):
+                                    #TODO - add NLP support for finding dates and times.
+                                    bot_msg = "Ok, you want to silence study notifications until xx.\nIs that right?"
+                                elif (strongest_intent == "view_facts"):
+                                    #TODO - display facts using some sort of interactive list.
+                                    bot_msg = "Ok, here are the facts we have."
+                                elif (strongest_intent == "default_intent"):
+                                    #TODO - provide user some suggested actions to help them.
+                                    bot_msg = "I'm not sure what you mean."
+                                    pass
+                            elif (convo_state == State.WAITING_FOR_FACT_QUESTION):
+                                pass
 
-                        #TODO we will need to add some handling for modes, for conversation flows.
-
-                        send_message(sender_id, bot_msg, is_response=True)
+                            send_message(sender_id, bot_msg, is_response=True)
 
                         change_typing_indicator(enabled=False, user_id=sender_id)
         else:
@@ -189,6 +202,14 @@ def handle_messages():
 #===============================================================================
 # Helper Routines
 #===============================================================================
+def get_convo_state(user_id):
+    #TODO
+    return(State.DEFAULT)
+
+def set_convo_state(user_id, new_state):
+    #TODO
+    pass
+
 def msg_contains_greeting(nlp_entities, min_conf_threshold):
     return_val = False
 
