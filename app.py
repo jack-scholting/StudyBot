@@ -72,6 +72,7 @@ class Fact(db.Model):
 #===============================================================================
 # See https://developers.facebook.com/docs/messenger-platform/reference/send-api
 SEND_API_URL = "https://graph.facebook.com/v2.6/me/messages"
+
 RANDOM_PHRASES = [
     "Hey %s, how the heck are ya? Me, you ask? I'm feeling a little blue. :)",
     "Studying again %s? Look at you! We gotta future Rhodes scholar here!",
@@ -130,7 +131,7 @@ def handle_messages():
                         sender_id = messaging_event["sender"]["id"]
                         message = messaging_event["message"]["text"]
                         nlp = messaging_event["message"]["nlp"]
-                        print("DEBUG: Incoming from %s: %s" % (sender_id, message))
+                        print("DEBUG: Incoming from %s: %s" % (sender_id, message.encode('utf-8')))
 
                         change_typing_indicator(enabled=True, user_id=sender_id)
 
