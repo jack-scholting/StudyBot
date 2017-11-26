@@ -79,6 +79,13 @@ RANDOM_PHRASES = [
     "You want to study right now, %s? Nerd Alert! Nerds are so in right now!"
 ]
 
+"""
+Note: This is a trade-off between "precision" and "recall"
+as discussed here:
+https://wit.ai/docs/recipes#which-confidence-threshold-should-i-use
+"""
+MIN_CONFIDENCE_THRESHOLD = 0.6
+
 #===============================================================================
 # Flask Routines
 #===============================================================================
@@ -120,7 +127,8 @@ def handle_messages():
                 # The "messaging" event occurs when a message is sent to our page.
                 for messaging_event in entry["messaging"]:
                     if (messaging_event.get("postback")):
-                        #TODO - handle welcome message.
+                        #TODO - handle welcome message per:
+                        #https://developers.facebook.com/docs/messenger-platform/discovery/welcome-screen
                         pass
 
                     if (messaging_event.get("message")):
@@ -135,33 +143,32 @@ def handle_messages():
 
                         change_typing_indicator(enabled=True, user_id=sender_id)
 
-                        #TODO - refactor to follow guidance from https://developers.facebook.com/docs/messenger-platform/discovery/welcome-screen
                         if (is_first_time_user(sender_id)):
                             create_user(sender_id)
                             send_welcome_message(sender_id)
 
-                        max_confidence = 0
-                        current_intent = "default intent"
-                        for nlp_entity in nlp["entities"]:
-                            nlp_payload = nlp["entities"][nlp_entity][0]
-                            if nlp_payload.get('confidence'):
-                                if max_confidence < nlp_payload.get('confidence'):
-                                    current_intent = nlp_entity
-                                    max_confidence = nlp_payload.get('confidence')
-
-                        print("DEBUG: NLP Entity")
-                        print(current_intent)
-
-                        if current_intent == 'greetings':
+                        if (msg_contains_greeting(nlp["entities"], MIN_CONFIDENCE_THRESHOLD)):
                             send_greeting_message(sender_id)
 
-                        #TODO - handle NLP data.
+                        strongest_intent = get_strongest_intent(nlp["entities"], MIN_CONFIDENCE_THRESHOLD)
+                        print("DEBUG: NLP intent: " + strongest_intent)
+
+                        if (strongest_intent == "default_intent"):
+                            pass
+                        elif (strongest_intent == "save_fact"):
+                            pass
+                        #TODO - handle additional intents
+
 
                         #TODO we will need to add some handling for modes, for conversation flows.
 
-                        #TODO - consider adding a message type https://developers.facebook.com/docs/messenger-platform/send-messages/#messaging_types
+                        #TODO - consider adding a message type based on what we are sending.
+                        #   https://developers.facebook.com/docs/messenger-platform/send-messages/#messaging_types
+
+                        #TODO - temporary code, just echos the message.
                         firstname = get_users_firstname(sender_id)
                         msg_text = "Hello " + firstname + " : " + message
+
                         send_message(sender_id, msg_text)
                         change_typing_indicator(enabled=False, user_id=sender_id)
         else:
@@ -178,6 +185,28 @@ def handle_messages():
 #===============================================================================
 # Helper Routines
 #===============================================================================
+def msg_contains_greeting(nlp_entities, min_conf_threshold):
+    return_val = False
+
+    if (nlp_entities.get('greetings')):
+        if(nlp_entities['greetings'][0]['confidence'] > min_conf_threshold):
+            return_val = True
+
+    return(return_val)
+
+def get_strongest_intent(nlp_entities, min_confidence_threshold):
+    strongest_intent = "default_intent"
+    highest_confidence_seen = min_conf_threshold
+
+    for nlp_entity in nlp_entities:
+        if (nlp_entity == 'intent'):
+            confidence = nlp_entities[nlp_entity][0]['confidence']
+            if (confidence > highest_confidence_seen):
+                highest_confidence_seen = confidence
+                strongest_intent = nlp_entities[nlp_entity][0]['value']
+
+    return(strongest_intent)
+
 def get_verif_token():
     """
     This is a secret token we provide Facebook so we can verify the request is
