@@ -141,6 +141,7 @@ def handle_messages():
                             send_welcome_message(sender_id)
 
                         max_confidence = 0
+                        current_intent = "default intent"
                         for nlp_entity in nlp["entities"]:
                             nlp_payload = nlp["entities"][nlp_entity][0]
                             if nlp_payload.get('confidence'):
