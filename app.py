@@ -129,9 +129,9 @@ def handle_messages():
                         identifier for a given person interacting with a given page.
                         """
                         sender_id = messaging_event["sender"]["id"]
-                        message = messaging_event["message"]["text"]
+                        message = messaging_event["message"]["text"].encode('unicode_escape')
                         nlp = messaging_event["message"]["nlp"]
-                        print("DEBUG: Incoming from %s: %s" % (sender_id, message.encode('utf-8')))
+                        print("DEBUG: Incoming from %s: %s" % (sender_id, message))
 
                         change_typing_indicator(enabled=True, user_id=sender_id)
 
@@ -160,7 +160,7 @@ def handle_messages():
 
                         #TODO - consider adding a message type https://developers.facebook.com/docs/messenger-platform/send-messages/#messaging_types
                         firstname = get_users_firstname(sender_id)
-                        msg_text = "Hello " + firstname + " : " + message.decode('unicode_escape')
+                        msg_text = "Hello " + firstname + " : " + message
                         send_message(sender_id, msg_text)
                         change_typing_indicator(enabled=False, user_id=sender_id)
         else:
@@ -230,7 +230,7 @@ def send_message(user_id, msg_text):
     }
     data = json.dumps({
         "recipient": {"id": user_id},
-        "message": {"text": msg_text}
+        "message": {"text": msg_text.decode('unicode_escape')}
     })
 
     r = requests.post(url=SEND_API_URL, params=params, data=data, headers=headers)
@@ -255,9 +255,9 @@ def get_users_firstname(user_id):
     return (json_response["first_name"])
 
 def is_first_time_user(user_id):
-    print("DEBUG: Checking if user %s exists", user_id)
+    print("DEBUG: Checking if user %s exists" % user_id)
     current_user = User.query.filter_by(fb_id=user_id).one_or_none()
-    print("DEBUG: User %r", current_user)
+    print("DEBUG: User %r" % current_user)
     return True if (current_user is None) else False
 
 def send_welcome_message(user_id):
