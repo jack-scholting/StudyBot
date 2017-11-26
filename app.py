@@ -84,7 +84,7 @@ RANDOM_PHRASES = [
 Note: This is a trade-off between "precision" and "recall" as discussed here:
 https://wit.ai/docs/recipes#which-confidence-threshold-should-i-use
 """
-MIN_CONFIDENCE_THRESHOLD = 0.6
+MIN_CONFIDENCE_THRESHOLD = 0.7
 
 """
 The following states are used to create a conversation flow.
@@ -92,6 +92,8 @@ The following states are used to create a conversation flow.
 class State(enum.Enum):
     DEFAULT = 0
     WAITING_FOR_FACT_QUESTION = 1
+    WAITING_FOR_FACT_ANSWER = 2
+    CONFIRM_NEW_FACT = 3
 
 #===============================================================================
 # Flask Routines
@@ -166,7 +168,6 @@ def handle_messages():
                                 print("DEBUG: NLP intent: " + strongest_intent)
 
                                 if (strongest_intent == "add_fact"):
-                                    #TODO - change state machine so the next reponse is processed correctly.
                                     bot_msg = "Ok, let's that new fact. What is the question?"
                                     set_convo_state(sender_id, State.WAITING_FOR_FACT_QUESTION)
                                 elif (strongest_intent == "change_fact"):
@@ -177,13 +178,26 @@ def handle_messages():
                                     bot_msg = "Ok, you want to silence study notifications until xx.\nIs that right?"
                                 elif (strongest_intent == "view_facts"):
                                     #TODO - display facts using some sort of interactive list.
-                                    bot_msg = "Ok, here are the facts we have."
+                                    bot_msg = "Ok, here are the facts we have. "
+                                    bot_msg = bot_msg + str(get_user_facts(sender_id))
                                 elif (strongest_intent == "default_intent"):
                                     #TODO - provide user some suggested actions to help them.
                                     bot_msg = "I'm not sure what you mean."
                                     pass
                             elif (convo_state == State.WAITING_FOR_FACT_QUESTION):
+                                #TODO - temporarily save fact question
+                                bot_msg = "Thanks, what's the answer that question?"
+                                set_convo_state(sender_id, State.WAITING_FOR_FACT_ANSWER)
+                            elif (convo_state == State.WAITING_FOR_FACT_ANSWER):
+                                #TODO - temporarily save fact answer
+                                bot_msg = "Ok, I have the following question and answer, is it right?"
+                                #TODO - display question/answer
+                                set_convo_state(sender_id, State.CONFIRM_NEW_FACT)
+                            elif (convo_state == State.CONFIRM_NEW_FACT):
+                                #TODO - either abort or add new fact.
+                                #create_new_fact(sender_id, )
                                 pass
+
 
                             send_message(sender_id, bot_msg, is_response=True)
 
@@ -207,6 +221,10 @@ def get_convo_state(user_id):
     return(State.DEFAULT)
 
 def set_convo_state(user_id, new_state):
+    #TODO
+    pass
+
+def get_next_fact_to_study(user_id):
     #TODO
     pass
 
