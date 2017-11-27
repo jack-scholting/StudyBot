@@ -95,9 +95,6 @@ class State(enum.Enum):
     WAITING_FOR_FACT_ANSWER = 2
     CONFIRM_NEW_FACT = 3
 
-#TODO - this is temporary until the database is updated
-temp_state = State.DEFAULT
-
 #===============================================================================
 # Flask Routines
 #===============================================================================
@@ -173,7 +170,7 @@ def handle_messages():
                                 print("DEBUG: NLP intent: " + strongest_intent)
 
                                 if (strongest_intent == "add_fact"):
-                                    bot_msg = "Ok, let's that new fact. What is the question?"
+                                    bot_msg = "Ok, let's add that new fact. What is the question?"
                                     set_convo_state(sender_id, State.WAITING_FOR_FACT_QUESTION)
                                 elif (strongest_intent == "change_fact"):
                                     #TODO - display facts using some sort of interactive list.
@@ -201,14 +198,14 @@ def handle_messages():
                                 set_convo_state(sender_id, State.WAITING_FOR_FACT_ANSWER)
                             elif (convo_state == State.WAITING_FOR_FACT_ANSWER):
                                 #TODO - temporarily save fact answer
-                                bot_msg = "Ok, I have the following question and answer, is it right?"
+                                bot_msg = "Ok, I have the following question and answer, is this right?"
                                 #TODO - display question/answer
                                 set_convo_state(sender_id, State.CONFIRM_NEW_FACT)
                             elif (convo_state == State.CONFIRM_NEW_FACT):
-                                #TODO - either abort or add new fact.
+                                #TODO - either abort or add new fact. Need to add NLP to check for positive or
+                                # negative response, and either abort or add the fact.
                                 #create_new_fact(sender_id, )
                                 pass
-
 
                             send_message(sender_id, bot_msg, is_response=True)
 
@@ -229,16 +226,14 @@ def handle_messages():
 #===============================================================================
 def get_convo_state(user_id):
     #TODO - update to use database.
-    global temp_state
-    return(temp_state)
+    return(State.DEFAULT)
 
 def set_convo_state(user_id, new_state):
     #TODO - update to use database.
-    global temp_state
-    temp_state = new_state
+    pass
 
 def get_next_fact_to_study(user_id):
-    #TODO
+    #TODO - pull fact from database according to SR algorithm.
     pass
 
 def msg_contains_greeting(nlp_entities, min_conf_threshold):
