@@ -163,6 +163,8 @@ def handle_messages():
                         else:
                             convo_state = get_convo_state(sender_id)
 
+                            print("DEBUG: Conversation State: " + convo_state.name)
+
                             if (convo_state == State.DEFAULT):
                                 if (msg_contains_greeting(nlp["entities"], MIN_CONFIDENCE_THRESHOLD)):
                                     send_greeting_message(sender_id)
