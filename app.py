@@ -95,6 +95,9 @@ class State(enum.Enum):
     WAITING_FOR_FACT_ANSWER = 2
     CONFIRM_NEW_FACT = 3
 
+#TODO - this is temporary until the database is updated
+temp_state = State.DEFAULT
+
 #===============================================================================
 # Flask Routines
 #===============================================================================
@@ -180,6 +183,12 @@ def handle_messages():
                                     #TODO - display facts using some sort of interactive list.
                                     bot_msg = "Ok, here are the facts we have. "
                                     bot_msg = bot_msg + str(get_user_facts(sender_id))
+                                elif (strongest_intent == "delete_fact"):
+                                    #TODO - display facts using some sort of interactive list.
+                                    bot_msg = "Ok, which fact do you want to delete?"
+                                elif (strongest_intent == "study_next_fact"):
+                                    #TODO - start study flow
+                                    pass
                                 elif (strongest_intent == "default_intent"):
                                     #TODO - provide user some suggested actions to help them.
                                     bot_msg = "I'm not sure what you mean."
@@ -217,12 +226,14 @@ def handle_messages():
 # Helper Routines
 #===============================================================================
 def get_convo_state(user_id):
-    #TODO
-    return(State.DEFAULT)
+    #TODO - update to use database.
+    global temp_state
+    return(temp_state)
 
 def set_convo_state(user_id, new_state):
-    #TODO
-    pass
+    #TODO - update to use database.
+    global temp_state
+    temp_state = new_state
 
 def get_next_fact_to_study(user_id):
     #TODO
