@@ -174,7 +174,7 @@ def handle_messages():
                         change_typing_indicator(enabled=True, user_id=sender_id)
 
                         restore_convo_state(user_id=sender_id)
-                        print("DEBUG: CURRENT_USER: " + CURRENT_USER)
+                        print("DEBUG: CURRENT_USER: " + json.dumps(CURRENT_USER))
 
                         if (is_first_time_user(sender_id)):
                             create_user(sender_id)
