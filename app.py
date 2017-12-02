@@ -5,12 +5,17 @@ import json
 import requests
 import os
 import enum
+import redis
 
 # Create the Flask application instance.
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ['DATABASE_URL']
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
+
+# Get Redis Cache
+cache = redis.from_url(os.environ.get("REDIS_URL"))
+
 
 
 #===============================================================================
@@ -49,14 +54,17 @@ class Fact(db.Model):
     __tablename__ = 'facts'
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    fact = db.Column(db.String, unique=True)
+    question = db.Column(db.String, unique=True)
+    answer = db.Column(db.String, nullable=False)
+    confidence = db.Column(db.Integer)
     last_seen = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     __table_args__ = (
-        db.UniqueConstraint('user_id', 'fact', name='user_id_fact'),
+        db.UniqueConstraint('user_id', 'question', name='user_id_fact'),
+        db.CheckConstraint('confidence >= 0 AND confidence <=5', name='check_confidence')
     )
 
     def __repr__(self):
-        return '<FB ID - Fact: %r - %r>' % self.fb_id, self.fact
+        return '<FB ID - Fact: %r - %r: %r>' % self.fb_id, self.question, self.answer
 
     @property
     def serialize(self):
@@ -64,7 +72,9 @@ class Fact(db.Model):
         return {
             'id': self.id,
             'user_id': self.user_id,
-            'fact': self.fact,
+            'question': self.question,
+            'answer': self.answer,
+            'confidence': self.confidence,
             'last_seen': self.last_seen
         }
 
@@ -86,6 +96,13 @@ https://wit.ai/docs/recipes#which-confidence-threshold-should-i-use
 """
 MIN_CONFIDENCE_THRESHOLD = 0.7
 
+
+class ConvoState:
+    def __init__(self, user_id, state=None):
+        self.user = get_user_facts(user_id)
+        self.fact = Fact()
+        self.state = State.DEFAULT if state is None else state
+
 """
 The following states are used to create a conversation flow.
 """
@@ -94,6 +111,9 @@ class State(enum.Enum):
     WAITING_FOR_FACT_QUESTION = 1
     WAITING_FOR_FACT_ANSWER = 2
     CONFIRM_NEW_FACT = 3
+
+
+CURRENT_USER = ConvoState(0, State.DEFAULT)
 
 #===============================================================================
 # Flask Routines
@@ -153,12 +173,16 @@ def handle_messages():
 
                         change_typing_indicator(enabled=True, user_id=sender_id)
 
+                        restore_convo_state(user_id=sender_id)
+                        print("DEBUG: CURRENT_USER: " + CURRENT_USER)
+
                         if (is_first_time_user(sender_id)):
                             create_user(sender_id)
                             send_welcome_message(sender_id)
-                            set_convo_state(sender_id, State.DEFAULT)
+                            set_convo_state(State.DEFAULT)
                         else:
-                            convo_state = get_convo_state(sender_id)
+                            restore_convo_state(user_id=sender_id)
+                            convo_state = CURRENT_USER.state
 
                             print("DEBUG: Conversation State: " + convo_state.name)
 
@@ -171,7 +195,7 @@ def handle_messages():
 
                                 if (strongest_intent == "add_fact"):
                                     bot_msg = "Ok, let's add that new fact. What is the question?"
-                                    set_convo_state(sender_id, State.WAITING_FOR_FACT_QUESTION)
+                                    set_convo_state(State.WAITING_FOR_FACT_QUESTION)
                                 elif (strongest_intent == "change_fact"):
                                     #TODO - display facts using some sort of interactive list.
                                     bot_msg = "Ok, which fact do you want to change?"
@@ -193,15 +217,21 @@ def handle_messages():
                                     bot_msg = "I'm not sure what you mean."
                                     pass
                             elif (convo_state == State.WAITING_FOR_FACT_QUESTION):
-                                #TODO - temporarily save fact question
+                                CURRENT_USER.fact.user_id = CURRENT_USER.user.id
+                                CURRENT_USER.fact.question = sender_msg
+                                set_convo_state(State.WAITING_FOR_FACT_ANSWER)
                                 bot_msg = "Thanks, what's the answer that question?"
-                                set_convo_state(sender_id, State.WAITING_FOR_FACT_ANSWER)
+
                             elif (convo_state == State.WAITING_FOR_FACT_ANSWER):
-                                #TODO - temporarily save fact answer
-                                bot_msg = "Ok, I have the following question and answer, is this right?"
-                                #TODO - display question/answer
-                                set_convo_state(sender_id, State.CONFIRM_NEW_FACT)
+                                CURRENT_USER.fact.answer = sender_msg
+                                bot_msg = "Ok, I have the following question and answer, is this right?\n"
+                                bot_msg += "Question: %s?\n", CURRENT_USER.fact.question
+                                bot_msg += "Answer: %s", CURRENT_USER.fact.answer
+                                set_convo_state(State.CONFIRM_NEW_FACT)
                             elif (convo_state == State.CONFIRM_NEW_FACT):
+                                create_new_fact(CURRENT_USER.fact)
+                                CURRENT_USER.fact = Fact()
+                                set_convo_state(State.DEFAULT)
                                 #TODO - either abort or add new fact. Need to add NLP to check for positive or
                                 # negative response, and either abort or add the fact.
                                 #create_new_fact(sender_id, )
@@ -221,20 +251,33 @@ def handle_messages():
     """
     return ("ok", 200)
 
-#===============================================================================
-# Helper Routines
-#===============================================================================
-def get_convo_state(user_id):
-    #TODO - update to use database.
-    return(State.DEFAULT)
 
-def set_convo_state(user_id, new_state):
-    #TODO - update to use database.
-    pass
+# ===============================================================================
+# Helper Routines
+# ===============================================================================
+def restore_convo_state(user_id):
+    user_data = json.loads(cache.get(user_id).decode("utf-8"))
+    if not user_data:
+        user_data = ConvoState(user_id, State.DEFAULT)
+    set_user(user_data)
+
+
+def set_convo_state(new_state):
+    global CURRENT_USER
+    CURRENT_USER.state = new_state
+    set_user(CURRENT_USER)
+    cache.set(user_id, json.dumps(CURRENT_USER))
+
+
+def set_user(user_data):
+    global CURRENT_USER
+    CURRENT_USER = user_data
+
 
 def get_next_fact_to_study(user_id):
     #TODO - pull fact from database according to SR algorithm.
     pass
+
 
 def msg_contains_greeting(nlp_entities, min_conf_threshold):
     return_val = False
@@ -244,6 +287,7 @@ def msg_contains_greeting(nlp_entities, min_conf_threshold):
             return_val = True
 
     return(return_val)
+
 
 def get_strongest_intent(nlp_entities, min_conf_threshold):
     strongest_intent = "default_intent"
@@ -258,6 +302,7 @@ def get_strongest_intent(nlp_entities, min_conf_threshold):
 
     return(strongest_intent)
 
+
 def get_verif_token():
     """
     This is a secret token we provide Facebook so we can verify the request is
@@ -267,6 +312,7 @@ def get_verif_token():
     """
     return(os.environ["VERIFY_TOKEN"])
 
+
 def get_page_access_token():
     """
     This PAT (Page Access Token) is used to authenticate our requests/responses.
@@ -275,6 +321,7 @@ def get_page_access_token():
        heroku config:add PAGE_ACCESS_TOKEN=your_token_here
     """
     return(os.environ["PAGE_ACCESS_TOKEN"])
+
 
 def change_typing_indicator(enabled, user_id):
     if(enabled):
@@ -298,6 +345,7 @@ def change_typing_indicator(enabled, user_id):
     # Check the returned status code of the POST.
     if r.status_code != requests.codes.ok:
         print("DEBUG: " + r.text)
+
 
 def send_message(user_id, msg_text, is_response):
     """
@@ -326,6 +374,7 @@ def send_message(user_id, msg_text, is_response):
     if r.status_code != requests.codes.ok:
         print("DEBUG: " + r.text)
 
+
 """
 Explaination at https://developers.facebook.com/docs/messenger-platform/identity/user-profile
 """
@@ -341,11 +390,13 @@ def get_users_firstname(user_id):
     json_response = json.loads(r.text)
     return (json_response["first_name"])
 
+
 def is_first_time_user(user_id):
     print("DEBUG: Checking if user %s exists" % user_id)
     current_user = User.query.filter_by(fb_id=user_id).one_or_none()
     print("DEBUG: User %r" % current_user)
     return True if (current_user is None) else False
+
 
 def send_welcome_message(user_id):
     firstname = get_users_firstname(user_id)
@@ -353,25 +404,28 @@ def send_welcome_message(user_id):
     send_message(user_id, msg, is_response=True)
     #TODO Add instructions for the user.
 
+
 def send_greeting_message(user_id):
     from random import randint
     phrase = RANDOM_PHRASES[randint(0, len(RANDOM_PHRASES)-1)]
     msg = phrase % get_users_firstname(user_id)
     send_message(user_id, msg, is_response=True)
 
+
 def create_user(user_id):
     new_user = User(fb_id=user_id)
     db.session.add(new_user)
     db.session.commit()
 
-def create_new_fact(user_id, new_fact):
-    user = User.query.filter_by(fb_id=user_id)
-    new_fact_record = Fact(user_id=user.id, fact=new_fact)
+
+def create_new_fact(new_fact_record):
     db.session.add(new_fact_record)
     db.session.commit()
 
+
 def get_user_facts(user_id):
     return jsonify(user=[i.serialize for i in User.query.filter_by(fb_id=user_id)])
+
 
 def delete_fact(user_id, fact):
     user = User.query.filter_by(fb_id=user_id)
@@ -379,9 +433,10 @@ def delete_fact(user_id, fact):
     db.session.delete(fact_record)
     db.session.commit()
 
-#===============================================================================
+
+# ===============================================================================
 # Main
-#===============================================================================
+# ===============================================================================
 if __name__ == '__main__':
     """
     Start the Flask app, the app will start listening for requests on port 5000.
