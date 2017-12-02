@@ -256,10 +256,12 @@ def handle_messages():
 # Helper Routines
 # ===============================================================================
 def restore_convo_state(user_id):
-    user_data = json.loads(cache.get(user_id).decode("utf-8"))
+    user_data = cache.get(user_id)
     if not user_data:
         user_data = ConvoState(user_id, State.DEFAULT)
         user_data.user = get_user_facts(user_id)
+    else:
+        user_data = json.loads(user_data.decode("utf-8"))
     set_user(user_data)
 
 
