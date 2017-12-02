@@ -99,7 +99,7 @@ MIN_CONFIDENCE_THRESHOLD = 0.7
 
 class ConvoState:
     def __init__(self, user_id, state=None):
-        self.user = get_user_facts(user_id)
+        self.user = User(fb_id=user_id)
         self.fact = Fact()
         self.state = State.DEFAULT if state is None else state
 
@@ -259,6 +259,7 @@ def restore_convo_state(user_id):
     user_data = json.loads(cache.get(user_id).decode("utf-8"))
     if not user_data:
         user_data = ConvoState(user_id, State.DEFAULT)
+        user_data.user = get_user_facts(user_id)
     set_user(user_data)
 
 
