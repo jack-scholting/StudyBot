@@ -238,8 +238,8 @@ def handle_messages():
                             elif (convo_state == State.WAITING_FOR_FACT_ANSWER):
                                 CURRENT_USER.tmp_fact.answer = sender_msg
                                 bot_msg = "Ok, I have the following question and answer, is this right?\n"
-                                bot_msg += "Question: %s?\n", CURRENT_USER.tmp_fact.question.decode('unicode_escape')
-                                bot_msg += "Answer: %s", CURRENT_USER.tmp_fact.answer.decode('unicode_escape')
+                                bot_msg += "Question: %s?\n", str(CURRENT_USER.tmp_fact.question.decode('unicode_escape'))
+                                bot_msg += "Answer: %s", str(CURRENT_USER.tmp_fact.answer.decode('unicode_escape'))
                                 set_convo_state(sender_id, State.CONFIRM_NEW_FACT)
                             elif (convo_state == State.CONFIRM_NEW_FACT):
                                 create_new_fact(CURRENT_USER.tmp_fact)
