@@ -215,34 +215,34 @@ def handle_messages():
                             if (convo_state == State.DEFAULT):
                                 if (msg_contains_greeting(nlp["entities"], MIN_CONFIDENCE_THRESHOLD)):
                                     send_greeting_message(sender_id)
+                                else:
 
-                                strongest_intent = get_strongest_intent(nlp["entities"], MIN_CONFIDENCE_THRESHOLD)
-                                print("DEBUG: NLP intent: " + strongest_intent)
+                                    strongest_intent = get_strongest_intent(nlp["entities"], MIN_CONFIDENCE_THRESHOLD)
+                                    print("DEBUG: NLP intent: " + strongest_intent)
 
-                                if (strongest_intent == "add_fact"):
-                                    bot_msg = "Ok, let's add that new fact. What is the question?"
-                                    set_convo_state(sender_id, State.WAITING_FOR_FACT_QUESTION)
-                                elif (strongest_intent == "change_fact"):
-                                    #TODO - display facts using some sort of interactive list.
-                                    bot_msg = "Ok, which fact do you want to change?"
-                                elif (strongest_intent == "silence_studying"):
-                                    #TODO - add NLP support for finding dates and times.
-                                    bot_msg = "Ok, you want to silence study notifications until xx.\nIs that right?"
-                                elif (strongest_intent == "view_facts"):
-                                    #TODO - display facts using some sort of interactive list.
-                                    bot_msg = "Ok, here are the facts we have.\n"
-                                    bot_msg = bot_msg + str(get_user_facts(sender_id))
-                                elif (strongest_intent == "delete_fact"):
-                                    #TODO - display facts using some sort of interactive list.
-                                    bot_msg = "Ok, which fact do you want to delete?"
-                                elif (strongest_intent == "study_next_fact"):
-                                    #TODO - start study flow
-                                    pass
-                                elif (strongest_intent == "default_intent"):
-                                    #TODO - provide user some suggested actions to help them.
-                                    bot_msg = "I'm not sure what you mean."
-                                    set_convo_state(sender_id, current_user.state)
-                                    pass
+                                    if (strongest_intent == "add_fact"):
+                                        bot_msg = "Ok, let's add that new fact. What is the question?"
+                                        set_convo_state(sender_id, State.WAITING_FOR_FACT_QUESTION)
+                                    elif (strongest_intent == "change_fact"):
+                                        #TODO - display facts using some sort of interactive list.
+                                        bot_msg = "Ok, which fact do you want to change?"
+                                    elif (strongest_intent == "silence_studying"):
+                                        #TODO - add NLP support for finding dates and times.
+                                        bot_msg = "Ok, you want to silence study notifications until xx.\nIs that right?"
+                                    elif (strongest_intent == "view_facts"):
+                                        #TODO - display facts using some sort of interactive list.
+                                        bot_msg = "Ok, here are the facts we have.\n"
+                                        bot_msg = bot_msg + str(get_user_facts(sender_id))
+                                    elif (strongest_intent == "delete_fact"):
+                                        #TODO - display facts using some sort of interactive list.
+                                        bot_msg = "Ok, which fact do you want to delete?"
+                                    elif (strongest_intent == "study_next_fact"):
+                                        #TODO - start study flow
+                                        pass
+                                    elif (strongest_intent == "default_intent"):
+                                        #TODO - provide user some suggested actions to help them.
+                                        bot_msg = "I'm not sure what you mean."
+                                        set_convo_state(sender_id, current_user.state)
 
                             elif (convo_state == State.WAITING_FOR_FACT_QUESTION):
                                 current_user.tmp_fact.user_id = current_user.user_id
