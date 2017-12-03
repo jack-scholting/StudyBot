@@ -78,8 +78,28 @@ class Fact(db.Model):
             'last_seen': self.last_seen
         }
 
+
 #===============================================================================
-# Global Data
+# General Classes
+#===============================================================================
+class ConvoState:
+    def __init__(self, user_id, state=None):
+        self.user_id = user_id
+        self.tmp_fact = Fact(user_id=user_id)
+        self.state = State.DEFAULT if state is None else state
+
+    @property
+    def serialize(self):
+        """Return object data in easily serializeable format"""
+        return {
+            'user_id': self.user_id,
+            'tmp_fact': self.tmp_fact.serialize,
+            'state': self.state.value
+        }
+
+
+#===============================================================================
+# Constants
 #===============================================================================
 # See https://developers.facebook.com/docs/messenger-platform/reference/send-api
 SEND_API_URL = "https://graph.facebook.com/v2.6/me/messages"
@@ -99,23 +119,6 @@ MIN_CONFIDENCE_THRESHOLD = 0.7
 # Expire cached entries after 5 minutes
 CACHE_EXPIRATION_IN_SECONDS = 300
 
-CURRENT_USER = None
-
-class ConvoState:
-    def __init__(self, user_id, state=None):
-        self.user_id = user_id
-        self.tmp_fact = Fact(user_id=user_id)
-        self.state = State.DEFAULT if state is None else state
-
-    @property
-    def serialize(self):
-        """Return object data in easily serializeable format"""
-        return {
-            'user_id': self.user_id,
-            'tmp_fact': self.tmp_fact.serialize,
-            'state': self.state.value
-        }
-
 """
 The following states are used to create a conversation flow.
 """
@@ -123,8 +126,12 @@ class State(enum.Enum):
     DEFAULT = 0
     WAITING_FOR_FACT_QUESTION = 1
     WAITING_FOR_FACT_ANSWER = 2
-    CONFIRM_NEW_FACT = 3
 
+
+#===============================================================================
+# Global Data
+#===============================================================================
+current_user = None
 
 
 #===============================================================================
@@ -198,10 +205,10 @@ def handle_messages():
                             set_convo_state(sender_id, State.DEFAULT)
                         else:
                             restore_convo_state(sender_id)
-                            print("DEBUG: CURRENT_USER")
-                            print(CURRENT_USER.serialize)
+                            print("DEBUG: current_user")
+                            print(current_user.serialize)
 
-                            convo_state = CURRENT_USER.state
+                            convo_state = current_user.state
 
                             print("DEBUG: Conversation State: " + convo_state.name)
 
@@ -234,28 +241,23 @@ def handle_messages():
                                 elif (strongest_intent == "default_intent"):
                                     #TODO - provide user some suggested actions to help them.
                                     bot_msg = "I'm not sure what you mean."
-                                    set_convo_state(sender_id, CURRENT_USER.state)
+                                    set_convo_state(sender_id, current_user.state)
                                     pass
+
                             elif (convo_state == State.WAITING_FOR_FACT_QUESTION):
-                                CURRENT_USER.tmp_fact.user_id = CURRENT_USER.user_id
-                                CURRENT_USER.tmp_fact.question = sender_msg.decode("unicode_escape")
+                                current_user.tmp_fact.user_id = current_user.user_id
+                                current_user.tmp_fact.question = sender_msg.decode("unicode_escape")
                                 set_convo_state(sender_id, State.WAITING_FOR_FACT_ANSWER)
-                                bot_msg = "Thanks, what's the answer that question?"
+                                bot_msg = "Thanks, what's the answer to that question?"
 
                             elif (convo_state == State.WAITING_FOR_FACT_ANSWER):
-                                CURRENT_USER.tmp_fact.answer = sender_msg.decode("unicode_escape")
-                                bot_msg = "Ok, I have the following question and answer, is this right?\n"
-                                bot_msg += "Question: %s\n" % CURRENT_USER.tmp_fact.question
-                                bot_msg += "Answer: %s" % CURRENT_USER.tmp_fact.answer
-                                set_convo_state(sender_id, State.CONFIRM_NEW_FACT)
-                            elif (convo_state == State.CONFIRM_NEW_FACT):
-                                bot_msg = create_new_fact(CURRENT_USER.tmp_fact)
-                                CURRENT_USER.tmp_fact = Fact(user_id=CURRENT_USER.user_id)
+                                current_user.tmp_fact.answer = sender_msg.decode("unicode_escape")
+                                bot_msg = create_new_fact(current_user.tmp_fact)
+                                current_user.tmp_fact = Fact(user_id=current_user.user_id)
+                                bot_msg = "Ok, I added the following question and answer:\n"
+                                bot_msg += "Question: %s\n" % current_user.tmp_fact.question
+                                bot_msg += "Answer: %s" % current_user.tmp_fact.answer
                                 set_convo_state(sender_id, State.DEFAULT)
-                                #TODO - either abort or add new fact. Need to add NLP to check for positive or
-                                # negative response, and either abort or add the fact.
-                                #create_new_fact(sender_id, )
-                                pass
 
                             send_message(sender_id, bot_msg, is_response=True)
 
@@ -296,19 +298,20 @@ def restore_convo_state(sender_id):
 
 
 def set_convo_state(sender_id, new_state):
-    global CURRENT_USER
-    CURRENT_USER.state = new_state
-    set_user(CURRENT_USER)
+    global current_user
+    current_user.state = new_state
+    set_user(current_user)
     print("DEBUG: Cache set.")
-    cache.set(sender_id, json.dumps(CURRENT_USER.serialize))
+    cache.set(sender_id, json.dumps(current_user.serialize))
     cache.expire(sender_id, CACHE_EXPIRATION_IN_SECONDS)
 
-def set_user(user_data):
-    print("DEBUG: Updating CURRENT_USER.")
-    global CURRENT_USER
 
-    CURRENT_USER = user_data
-    print(CURRENT_USER.serialize)
+def set_user(user_data):
+    print("DEBUG: Updating current_user.")
+    global current_user
+
+    current_user = user_data
+    print(current_user.serialize)
 
 
 def get_next_fact_to_study(user_id):
@@ -427,8 +430,10 @@ def get_users_firstname(user_id):
     json_response = json.loads(r.text)
     return (json_response["first_name"])
 
+
 def get_user(user_id):
     return User.query.filter_by(fb_id=user_id).one_or_none()
+
 
 def is_first_time_user(sender_id):
     print("DEBUG: Checking if user %s exists" % sender_id)
@@ -465,7 +470,6 @@ def create_new_fact(new_fact_record):
     except:
         return_msg = "Failed to add fact. Did you add this fact already?"
     return return_msg
-
 
 
 def get_user_facts(sender_id):
