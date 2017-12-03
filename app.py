@@ -59,7 +59,7 @@ class Fact(db.Model):
     confidence = db.Column(db.Integer)
     last_seen = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     __table_args__ = (
-        db.UniqueConstraint('user_id', 'question', name='user_id_fact'),
+        db.Index('user_id_question', 'user_id', db.text("lower(question)")),
         db.CheckConstraint('confidence >= 0 AND confidence <=5', name='check_confidence')
     )
 
@@ -216,7 +216,7 @@ def handle_messages():
                                     bot_msg = "Ok, you want to silence study notifications until xx.\nIs that right?"
                                 elif (strongest_intent == "view_facts"):
                                     #TODO - display facts using some sort of interactive list.
-                                    bot_msg = "Ok, here are the facts we have. "
+                                    bot_msg = "Ok, here are the facts we have.\n"
                                     bot_msg = bot_msg + str(get_user_facts(sender_id))
                                 elif (strongest_intent == "delete_fact"):
                                     #TODO - display facts using some sort of interactive list.
@@ -231,19 +231,19 @@ def handle_messages():
                                     pass
                             elif (convo_state == State.WAITING_FOR_FACT_QUESTION):
                                 CURRENT_USER.tmp_fact.user_id = CURRENT_USER.user_id
-                                CURRENT_USER.tmp_fact.question = sender_msg
+                                CURRENT_USER.tmp_fact.question = sender_msg.decode("unicode_escape")
                                 set_convo_state(sender_id, State.WAITING_FOR_FACT_ANSWER)
                                 bot_msg = "Thanks, what's the answer that question?"
 
                             elif (convo_state == State.WAITING_FOR_FACT_ANSWER):
-                                CURRENT_USER.tmp_fact.answer = sender_msg
+                                CURRENT_USER.tmp_fact.answer = sender_msg.decode("unicode_escape")
                                 bot_msg = "Ok, I have the following question and answer, is this right?\n"
-                                bot_msg += "Question: %s?\n", str(CURRENT_USER.tmp_fact.question.decode('unicode_escape'))
-                                bot_msg += "Answer: %s", str(CURRENT_USER.tmp_fact.answer.decode('unicode_escape'))
+                                bot_msg += "Question: %s\n" % CURRENT_USER.tmp_fact.question
+                                bot_msg += "Answer: %s" % CURRENT_USER.tmp_fact.answer
                                 set_convo_state(sender_id, State.CONFIRM_NEW_FACT)
                             elif (convo_state == State.CONFIRM_NEW_FACT):
-                                create_new_fact(CURRENT_USER.tmp_fact)
-                                CURRENT_USER.fact = Fact()
+                                bot_msg = create_new_fact(CURRENT_USER.tmp_fact)
+                                CURRENT_USER.tmp_fact = Fact(user_id=CURRENT_USER.user_id)
                                 set_convo_state(sender_id, State.DEFAULT)
                                 #TODO - either abort or add new fact. Need to add NLP to check for positive or
                                 # negative response, and either abort or add the fact.
@@ -301,7 +301,7 @@ def set_user(user_data):
     global CURRENT_USER
 
     CURRENT_USER = user_data
-    print(CURRENT_USER)
+    print(CURRENT_USER.serialize)
 
 
 def get_next_fact_to_study(user_id):
@@ -451,12 +451,25 @@ def create_user(sender_id):
 
 
 def create_new_fact(new_fact_record):
-    db.session.add(new_fact_record)
-    db.session.commit()
+    return_msg = "Fact Added Successfully"
+    try:
+        db.session.add(new_fact_record)
+        db.session.commit()
+    except:
+        return_msg = "Failed to add fact. Did you add this fact already?"
+    return return_msg
+
 
 
 def get_user_facts(sender_id):
-    return jsonify(user=[i.serialize for i in get_user(sender_id)])
+    facts = get_user(sender_id).facts
+    return_msg = ""
+    for fact in facts:
+        return_msg += "Question: %s\n" % fact.question
+        return_msg += "Answer: %s\n" % fact.answer
+        return_msg += "Confidence: %s\n" % fact.confidence
+        return_msg += "Last Seen: %s\n\n" % "{:%B %d, %Y}".format(fact.last_seen)
+    return return_msg
 
 
 def delete_fact(sender_id, fact):
