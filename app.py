@@ -182,7 +182,11 @@ def handle_messages():
                             sender_msg = messaging_event["message"]["text"].encode('unicode_escape')
                         else:
                             sender_msg = "Not text"
-                        nlp = messaging_event["message"]["nlp"]
+                        if messaging_event["message"].get("nlp"):
+                            nlp = messaging_event["message"]["nlp"]
+                        else:
+                            nlp = {"entities": {}}
+
                         print("DEBUG: Incoming from %s: %s" % (sender_id, sender_msg))
                         bot_msg = ""
 
