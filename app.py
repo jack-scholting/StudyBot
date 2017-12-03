@@ -178,7 +178,7 @@ def handle_messages():
                         identifier for a given person interacting with a given page.
                         """
                         sender_id = messaging_event["sender"]["id"]
-                        if messaging_event["message"]["text"]:
+                        if messaging_event["message"].get("text"):
                             sender_msg = messaging_event["message"]["text"].encode('unicode_escape')
                         else:
                             sender_msg = "Not text"
