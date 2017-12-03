@@ -252,8 +252,7 @@ def handle_messages():
 
                             elif (convo_state == State.WAITING_FOR_FACT_ANSWER):
                                 current_user.tmp_fact.answer = sender_msg.decode("unicode_escape")
-                                bot_msg = create_new_fact(current_user.tmp_fact)
-                                current_user.tmp_fact = Fact(user_id=current_user.user_id)
+                                create_new_fact(current_user.tmp_fact)
                                 bot_msg = "Ok, I added the following question and answer:\n"
                                 bot_msg += "Question: %s\n" % current_user.tmp_fact.question
                                 bot_msg += "Answer: %s" % current_user.tmp_fact.answer
