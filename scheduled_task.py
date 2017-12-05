@@ -29,7 +29,7 @@ def get_next_fact(user):
 if __name__ == '__main__':
     print("DEBUG: Periodic Task is running!")
 
-    app.send_message(601541080185276, "Testing push message!", False)
+    app.send_message(1694355543971879, "Testing push message!", False)
 
     all_users = get_all_users()
     for user in all_users:
