@@ -64,7 +64,7 @@ class Fact(db.Model):
     )
 
     def __repr__(self):
-        return '<FB ID - Fact: %r - %r: %r>' % self.fb_id, self.question, self.answer
+        return '<Fact %d: Q: %s A: %s>' % (self.user_id, self.question, self.answer)
 
     @property
     def serialize(self):
@@ -75,9 +75,13 @@ class Fact(db.Model):
             'question': self.question,
             'answer': self.answer,
             'confidence': self.confidence,
-            'last_seen': self.last_seen
+            'last_seen': self.serialize_date_time(self.last_seen)
         }
 
+    def serialize_date_time(self, date_time):
+        if isinstance(date_time, datetime):
+            return self.last_seen.isoformat()
+        return None
 
 #===============================================================================
 # General Classes
@@ -119,6 +123,14 @@ MIN_CONFIDENCE_THRESHOLD = 0.7
 # Expire cached entries after 5 minutes
 CACHE_EXPIRATION_IN_SECONDS = 300
 
+# Confirmation words for delete
+CONFIRMATIONS = [
+    "yes",
+    "yea",
+    "yep",
+    "y"
+]
+
 """
 The following states are used to create a conversation flow.
 """
@@ -126,6 +138,9 @@ class State(enum.Enum):
     DEFAULT = 0
     WAITING_FOR_FACT_QUESTION = 1
     WAITING_FOR_FACT_ANSWER = 2
+    WAITING_FOR_FACT_TO_CHANGE = 3
+    WAITING_FOR_FACT_TO_DELETE = 4
+    CONFIRM_FACT_DELETE = 5
 
 
 #===============================================================================
@@ -222,20 +237,22 @@ def handle_messages():
 
                                     if (strongest_intent == "add_fact"):
                                         bot_msg = "Ok, let's add that new fact. What is the question?"
+                                        current_user.tmp_fact = Fact(user_id=current_user.user_id)
                                         set_convo_state(sender_id, State.WAITING_FOR_FACT_QUESTION)
                                     elif (strongest_intent == "change_fact"):
-                                        #TODO - display facts using some sort of interactive list.
-                                        bot_msg = "Ok, which fact do you want to change?"
+                                        bot_msg = "Ok, which fact do you want to change?\n"
+                                        bot_msg += get_facts_for_display(sender_id)
+                                        set_convo_state(sender_id, State.WAITING_FOR_FACT_TO_CHANGE)
                                     elif (strongest_intent == "silence_studying"):
                                         #TODO - add NLP support for finding dates and times.
                                         bot_msg = "Ok, you want to silence study notifications until xx.\nIs that right?"
                                     elif (strongest_intent == "view_facts"):
-                                        #TODO - display facts using some sort of interactive list.
                                         bot_msg = "Ok, here are the facts we have.\n"
-                                        bot_msg = bot_msg + str(get_user_facts(sender_id))
+                                        bot_msg += get_facts_for_display(sender_id, True)
                                     elif (strongest_intent == "delete_fact"):
-                                        #TODO - display facts using some sort of interactive list.
-                                        bot_msg = "Ok, which fact do you want to delete?"
+                                        bot_msg = "Ok, which fact do you want to delete?\n"
+                                        bot_msg += get_facts_for_display(sender_id)
+                                        set_convo_state(sender_id, State.WAITING_FOR_FACT_TO_DELETE)
                                     elif (strongest_intent == "study_next_fact"):
                                         #TODO - start study flow
                                         pass
@@ -243,6 +260,40 @@ def handle_messages():
                                         #TODO - provide user some suggested actions to help them.
                                         bot_msg = "I'm not sure what you mean."
                                         set_convo_state(sender_id, current_user.state)
+
+                            elif (convo_state == State.WAITING_FOR_FACT_TO_CHANGE):
+                                tmp_fact = get_fact(sender_msg.decode("unicode_escape"))
+                                if not tmp_fact:
+                                    bot_msg = "Whoops! We don't have a fact for you. Try viewing your facts to get the ID."
+                                    state = State.DEFAULT
+                                else:
+                                    current_user.tmp_fact = tmp_fact
+                                    bot_msg = "Ok, let's update that new fact. What is the question?"
+                                    state = State.WAITING_FOR_FACT_QUESTION
+                                set_convo_state(sender_id, state)
+
+                            elif (convo_state == State.WAITING_FOR_FACT_TO_DELETE):
+                                tmp_fact = get_fact(sender_msg.decode("unicode_escape"))
+                                if not tmp_fact:
+                                    bot_msg = "Whoops! We don't have a fact for you. Try viewing your facts to get the ID."
+                                    state = State.DEFAULT
+                                else:
+                                    current_user.tmp_fact = tmp_fact
+                                    bot_msg = "Are you sure you want to delete this fact?\n"
+                                    bot_msg += "Question: %s\n" % current_user.tmp_fact.question
+                                    bot_msg += "Answer: %s" % current_user.tmp_fact.answer
+                                    state = State.CONFIRM_FACT_DELETE
+                                set_convo_state(sender_id, state)
+
+                            elif (convo_state == State.CONFIRM_FACT_DELETE):
+                                confirmed = sender_msg.decode("unicode_escape").lower() in CONFIRMATIONS
+                                if confirmed and delete_fact(current_user.tmp_fact.id):
+                                    bot_msg = "Fact deleted successfully."
+                                else:
+                                    bot_msg = "Failed to delete fact."
+
+                                current_user.tmp_fact = Fact(user_id=current_user.user_id)
+                                set_convo_state(sender_id, State.DEFAULT)
 
                             elif (convo_state == State.WAITING_FOR_FACT_QUESTION):
                                 current_user.tmp_fact.user_id = current_user.user_id
@@ -252,10 +303,13 @@ def handle_messages():
 
                             elif (convo_state == State.WAITING_FOR_FACT_ANSWER):
                                 current_user.tmp_fact.answer = sender_msg.decode("unicode_escape")
-                                create_new_fact(current_user.tmp_fact)
-                                bot_msg = "Ok, I added the following question and answer:\n"
-                                bot_msg += "Question: %s\n" % current_user.tmp_fact.question
-                                bot_msg += "Answer: %s" % current_user.tmp_fact.answer
+                                added_update = "update" if current_user.tmp_fact.id else "create"
+                                if upsert_fact(current_user.tmp_fact.id):
+                                    bot_msg = "Ok, I %sd the following question and answer:\n" % added_update
+                                    bot_msg += "Question: %s\n" % current_user.tmp_fact.question
+                                    bot_msg += "Answer: %s" % current_user.tmp_fact.answer
+                                else:
+                                    bot_msg = "We couldn't %s that fact." % added_update
                                 set_convo_state(sender_id, State.DEFAULT)
 
                             send_message(sender_id, bot_msg, is_response=True)
@@ -308,7 +362,6 @@ def set_convo_state(sender_id, new_state):
 def set_user(user_data):
     print("DEBUG: Updating current_user.")
     global current_user
-
     current_user = user_data
     print(current_user.serialize)
 
@@ -461,32 +514,84 @@ def create_user(sender_id):
     db.session.commit()
 
 
-def create_new_fact(new_fact_record):
-    return_msg = "Fact Added Successfully"
+def create_fact():
+    success = True
     try:
-        db.session.add(new_fact_record)
+        global current_user
+        db.session.add(current_user.tmp_fact)
         db.session.commit()
     except:
-        return_msg = "Failed to add fact. Did you add this fact already?"
-    return return_msg
+        print("ERROR: Failed to add fact %s" % current_user.tmp_fact)
+        success = False
+    return success
+
+
+def upsert_fact(fact_id=None):
+    if fact_id:
+        return update_fact(fact_id)
+    return create_fact()
+
+
+def update_fact(fact_id):
+    success = True
+    try:
+        global current_user
+        fact = Fact.query.filter_by(user_id=current_user.user_id, id=fact_id).one()
+        fact.question = current_user.tmp_fact.question
+        fact.answer = current_user.tmp_fact.answer
+        db.session.commit()
+    except:
+        print("ERROR: Failed to update fact %s" % current_user.tmp_fact)
+        success = False
+    return success
+
+
+def get_fact(fact_id):
+    try:
+        fact_id = int(fact_id)
+        print("DEBUG: Getting fact with id: %d" % fact_id)
+    except:
+        print("DEBUG: Getting fact with question: %s" % fact_id)
+        fact_id = fact_id
+
+    global current_user
+    if isinstance(fact_id, int):
+        fact = Fact.query.filter_by(user_id=current_user.user_id, id=fact_id).one_or_none()
+    else:
+        fact = Fact.query.filter_by(user_id=current_user.user_id, question=fact_id).one_or_none()
+
+    print("DEBUG: Fact: %r" % fact)
+    return fact
+
+
+def delete_fact(fact_id):
+    success = True
+    try:
+        global current_user
+        fact = Fact.query.filter_by(user_id=current_user.user_id, id=fact_id).one()
+        db.session.delete(fact)
+        db.session.commit()
+    except:
+        print("ERROR: Failed to delete fact %s" % current_user.tmp_fact)
+        success = False
+    return success
 
 
 def get_user_facts(sender_id):
-    facts = get_user(sender_id).facts
+    return get_user(sender_id).facts
+
+
+def get_facts_for_display(sender_id, include_confidence_and_last_seen=False):
     return_msg = ""
-    for fact in facts:
+    for fact in get_user_facts(sender_id):
+        return_msg += "Id: %d\n" % fact.id
         return_msg += "Question: %s\n" % fact.question
         return_msg += "Answer: %s\n" % fact.answer
-        return_msg += "Confidence: %s\n" % fact.confidence
-        return_msg += "Last Seen: %s\n\n" % "{:%B %d, %Y}".format(fact.last_seen)
+        if include_confidence_and_last_seen:
+            return_msg += "Confidence: %s\n" % fact.confidence
+            return_msg += "Last Seen: %s\n\n" % "{:%B %d, %Y}".format(fact.last_seen)
     return return_msg
 
-
-def delete_fact(sender_id, fact):
-    user = User.query.filter_by(fb_id=sender_id)
-    fact_record = Fact(user_id=user.id, fact=fact)
-    db.session.delete(fact_record)
-    db.session.commit()
 
 
 # ===============================================================================
