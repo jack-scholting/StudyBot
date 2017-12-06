@@ -141,6 +141,7 @@ class State(enum.Enum):
     WAITING_FOR_FACT_TO_CHANGE = 3
     WAITING_FOR_FACT_TO_DELETE = 4
     CONFIRM_FACT_DELETE = 5
+    WAITING_FOR_SILENCE_DURATION = 6
 
 
 #===============================================================================
@@ -246,11 +247,13 @@ def handle_messages():
                                     elif (strongest_intent == "silence_studying"):
                                         duration_seconds = get_nlp_duration(nlp['entities'], MIN_CONFIDENCE_THRESHOLD)
                                         if (duration_seconds):
-                                            bot_msg = "Ok, you want to silence study notifications until " + str(duration_seconds)
-                                            bot_msg = bot_msg + ".\nIs that right?"
+                                            now = time.time() # Unix timestamp
+                                            target_time = now + duration_seconds
+                                            bot_msg = "Ok, silencing study notifications until " + str(target_time) + "."
+                                            #TODO - updated database silence datetime.
                                         else:
                                             bot_msg = "Ok, how long do you want to silence notifications for?"
-                                            #set_convo_state(sender_id, State.WAITING_FOR_SILENCE_DA)
+                                            set_convo_state(sender_id, State.WAITING_FOR_SILENCE_DURATION)
                                     elif (strongest_intent == "view_facts"):
                                         bot_msg = "Ok, here are the facts we have.\n"
                                         bot_msg += get_facts_for_display(sender_id, True)
@@ -315,6 +318,17 @@ def handle_messages():
                                     bot_msg += "Answer: %s" % current_user.tmp_fact.answer
                                 else:
                                     bot_msg = "We couldn't %s that fact." % added_update
+                                set_convo_state(sender_id, State.DEFAULT)
+
+                            elif (convo_state == State.WAITING_FOR_SILENCE_DURATION):
+                                duration_seconds = get_nlp_duration(nlp['entities'], MIN_CONFIDENCE_THRESHOLD)
+                                if (duration_seconds):
+                                    now = time.time() # Unix timestamp
+                                    target_time = now + duration_seconds
+                                    bot_msg = "Ok, silencing study notifications until " + str(target_time) + "."
+                                    #TODO - updated database silence datetime.
+                                else:
+                                    bot_msg = "Sorry, I couldn't get a duration from that."
                                 set_convo_state(sender_id, State.DEFAULT)
 
                             send_message(sender_id, bot_msg, is_response=True)
