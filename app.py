@@ -250,7 +250,8 @@ def handle_messages():
                                         if (duration_seconds):
                                             now = time.time() # Unix timestamp
                                             target_time = now + duration_seconds
-                                            bot_msg = "Ok, silencing study notifications until " + str(target_time) + "."
+                                            target_datetime = datetime.fromtimestamp(target_time)
+                                            bot_msg = "Ok, silencing study notifications until " + str(target_datetime) + "."
                                             #TODO - updated database silence datetime.
                                         else:
                                             bot_msg = "Ok, how long do you want to silence notifications for?"
@@ -326,7 +327,8 @@ def handle_messages():
                                 if (duration_seconds):
                                     now = time.time() # Unix timestamp
                                     target_time = now + duration_seconds
-                                    bot_msg = "Ok, silencing study notifications until " + str(target_time) + "."
+                                    target_datetime = datetime.fromtimestamp(target_time)
+                                    bot_msg = "Ok, silencing study notifications until " + str(target_datetime) + "."
                                     #TODO - updated database silence datetime.
                                 else:
                                     bot_msg = "Sorry, I couldn't get a duration from that."
