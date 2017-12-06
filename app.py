@@ -263,8 +263,7 @@ def handle_messages():
                                         current_user.tmp_fact = Fact(user_id=current_user.user_id)
                                         set_convo_state(sender_id, State.WAITING_FOR_FACT_QUESTION)
                                     elif (strongest_intent == "change_fact"):
-                                        bot_msg = "Ok, which fact do you want to change?\n"
-                                        bot_msg += get_facts_for_display(sender_id)
+                                        send_facts_for_display(sender_id, "Ok, which fact do you want to change?")
                                         set_convo_state(sender_id, State.WAITING_FOR_FACT_TO_CHANGE)
                                     elif (strongest_intent == "silence_studying"):
                                         duration_seconds = get_nlp_duration(nlp['entities'], MIN_CONFIDENCE_THRESHOLD)
@@ -278,11 +277,9 @@ def handle_messages():
                                             bot_msg = "Ok, how long do you want to silence notifications for?"
                                             set_convo_state(sender_id, State.WAITING_FOR_SILENCE_DURATION)
                                     elif (strongest_intent == "view_facts"):
-                                        bot_msg = "Ok, here are the facts we have.\n"
-                                        bot_msg += get_facts_for_display(sender_id, True)
+                                        send_facts_for_display(sender_id, "Ok, here are the facts we have.", True)
                                     elif (strongest_intent == "delete_fact"):
-                                        bot_msg = "Ok, which fact do you want to delete?\n"
-                                        bot_msg += get_facts_for_display(sender_id)
+                                        send_facts_for_display(sender_id, "Ok, which fact do you want to delete?")
                                         set_convo_state(sender_id, State.WAITING_FOR_FACT_TO_DELETE)
                                     elif (strongest_intent == "study_next_fact"):
                                         #TODO - start study flow
@@ -498,6 +495,10 @@ def change_typing_indicator(enabled, user_id):
 
 
 def send_message(user_id, msg_text, is_response):
+
+    if msg_text == "":
+        return
+
     """
     Send the message msg_text to recipient.
     """
@@ -533,7 +534,7 @@ def get_users_firstname(user_id):
 
     params = {
         "access_token": get_page_access_token(),
-        "fields" : "first_name"
+        "fields": "first_name"
     }
 
     r = requests.get(url=url, params=params)
@@ -649,10 +650,10 @@ def get_user_facts(sender_id):
     return get_user(sender_id).facts
 
 
-def get_facts_for_display(sender_id, include_metadata=False):
-    return_msg = ""
+def send_facts_for_display(sender_id, initial_bot_msg, include_metadata=False):
+    send_message(sender_id, initial_bot_msg, is_response=True)
     for fact in get_user_facts(sender_id):
-        return_msg += "Id: %d\n" % fact.id
+        return_msg = "Id: %d\n" % fact.id
         return_msg += "Question: %s\n" % fact.question
         return_msg += "Answer: %s\n" % fact.answer
         if include_metadata:
@@ -660,7 +661,7 @@ def get_facts_for_display(sender_id, include_metadata=False):
             return_msg += "Consecutive Correct Answers: %s\n" % fact.consecutive_correct_answers
             return_msg += "Next Study Time: %s\n" % fact.serialize_date_time('next_due_date')
             return_msg += "Last Seen: %s\n\n" % fact.serialize_date_time('last_seen')
-    return return_msg
+        send_message(sender_id, return_msg, is_response=True)
 
 
 def parse_date_time(date_time):
