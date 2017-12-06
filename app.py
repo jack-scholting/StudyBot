@@ -244,8 +244,13 @@ def handle_messages():
                                         bot_msg += get_facts_for_display(sender_id)
                                         set_convo_state(sender_id, State.WAITING_FOR_FACT_TO_CHANGE)
                                     elif (strongest_intent == "silence_studying"):
-                                        #TODO - add NLP support for finding dates and times.
-                                        bot_msg = "Ok, you want to silence study notifications until xx.\nIs that right?"
+                                        duration_seconds = get_nlp_duration(nlp['entities'], MIN_CONFIDENCE_THRESHOLD)
+                                        if (duration_seconds):
+                                            bot_msg = "Ok, you want to silence study notifications until " + duration_seconds
+                                            bot_msg = bot_msg + ".\nIs that right?"
+                                        else:
+                                            bot_msg = "Ok, how long do you want to silence notifications for?"
+                                            #set_convo_state(sender_id, State.WAITING_FOR_SILENCE_DA)
                                     elif (strongest_intent == "view_facts"):
                                         bot_msg = "Ok, here are the facts we have.\n"
                                         bot_msg += get_facts_for_display(sender_id, True)
@@ -330,6 +335,19 @@ def handle_messages():
 # ===============================================================================
 # Helper Routines
 # ===============================================================================
+def get_nlp_duration(nlp_entities, min_conf_threshold):
+    """
+    This function returns "None" if no duration value can be found.
+    This function returns the duration in seconds if a duration value is found.
+    """
+    return_val = None
+
+    if (nlp_entities.get('duration')):
+        if(nlp_entities['duration'][0]['confidence'] > min_conf_threshold):
+            return_val = nlp_entities['duration'][0]['normalized']['value']
+
+    return(return_val)
+
 def restore_convo_state(sender_id):
     user_data = cache.get(sender_id)
     if not user_data:
