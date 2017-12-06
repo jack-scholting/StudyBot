@@ -1,7 +1,8 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
-from collections import namedtuple
+from decimal import Decimal
+from dateutil import parser
 
 import json
 import requests
@@ -26,6 +27,7 @@ class User(db.Model):
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
     fb_id = db.Column(db.String, unique=True)
+    silence_end_time = db.Column(db.DateTime)
     facts = db.relationship('Fact', lazy='select', backref=db.backref('users', lazy='joined'))
 
     def __init__(self, fb_id):
@@ -40,6 +42,7 @@ class User(db.Model):
         return {
             'id': self.id,
             'fb_id': self.fb_id,
+            'silence_end_time': self.serialize_date_time,
             'facts': self.serialize_one2many
         }
 
@@ -51,17 +54,24 @@ class User(db.Model):
        """
        return [item.serialize for item in self.facts]
 
+    def serialize_date_time(self):
+        if isinstance(self.last_seen, datetime):
+            return self.last_seen.isoformat()
+        return None
+
 class Fact(db.Model):
     __tablename__ = 'facts'
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     question = db.Column(db.String, unique=True)
     answer = db.Column(db.String, nullable=False)
-    confidence = db.Column(db.Integer)
+    easiness = db.Column(db.Numeric, nullable=True, default=0)
+    consecutive_correct_answers = db.Column(db.Integer, nullable=False, default=0)
     last_seen = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    next_due_date = db.Column(db.DateTime)
     __table_args__ = (
         db.Index('user_id_question', 'user_id', db.text("lower(question)")),
-        db.CheckConstraint('confidence >= 0 AND confidence <=5', name='check_confidence')
+        db.CheckConstraint('easiness >= 0', name='check_easiness')
     )
 
     def __repr__(self):
@@ -75,13 +85,24 @@ class Fact(db.Model):
             'user_id': self.user_id,
             'question': self.question,
             'answer': self.answer,
-            'confidence': self.confidence,
-            'last_seen': self.serialize_date_time(self.last_seen)
+            'easiness': self.serialize_numeric(),
+            'consecutive_correct_answers': self.consecutive_correct_answers,
+            'last_seen': self.serialize_date_time('last_seen'),
+            'next_due_date': self.serialize_date_time('next_due_date')
         }
 
-    def serialize_date_time(self, date_time):
-        if isinstance(date_time, datetime):
-            return self.last_seen.isoformat()
+    def serialize_numeric(self):
+        if isinstance(self.easiness, Decimal):
+            return float(self.easiness)
+        return float(0)
+
+    def serialize_date_time(self, column):
+        if column == 'last_seen':
+            if isinstance(self.last_seen, datetime):
+                return self.last_seen.isoformat()
+        elif column == 'next_due_date':
+            if isinstance(self.next_due_date, datetime):
+                return self.next_due_date.isoformat()
         return None
 
 #===============================================================================
@@ -372,6 +393,7 @@ def restore_convo_state(sender_id):
         user_data = get_user(sender_id)
         user_data = ConvoState(user_data.id, State.DEFAULT)
     else:
+        print("DEBUG: Cache hit. Using cached convo state. %s", user_data)
         print("DEBUG: Cache hit. Using cached convo state.")
         tmp = json.loads(user_data)
         user_data = ConvoState(tmp["user_id"], State(tmp["state"]))
@@ -380,10 +402,11 @@ def restore_convo_state(sender_id):
         user_data.tmp_fact.user_id = tmp["tmp_fact"]["user_id"]
         user_data.tmp_fact.question = tmp["tmp_fact"]["question"]
         user_data.tmp_fact.answer = tmp["tmp_fact"]["answer"]
-        user_data.tmp_fact.confidence = tmp["tmp_fact"]["confidence"]
-        user_data.tmp_fact.last_seen = tmp["tmp_fact"]["last_seen"]
+        user_data.tmp_fact.easiness = tmp["tmp_fact"]["easiness"]
+        user_data.tmp_fact.consecutive_correct_answers = tmp["tmp_fact"]["consecutive_correct_answers"]
+        user_data.tmp_fact.next_due_date = parse_date_time(tmp["tmp_fact"]["next_due_date"])
+        user_data.tmp_fact.last_seen = parse_date_time(tmp["tmp_fact"]["last_seen"])
     set_user(user_data)
-
 
 def set_convo_state(sender_id, new_state):
     global current_user
@@ -544,9 +567,16 @@ def send_greeting_message(sender_id):
 
 
 def create_user(sender_id):
-    new_user = User(fb_id=sender_id)
-    db.session.add(new_user)
-    db.session.commit()
+    success = True
+    try:
+        new_user = User(fb_id=sender_id)
+        db.session.add(new_user)
+        db.session.commit()
+    except Exception as e:
+        print("ERROR: Failed to create user %s" % sender_id)
+        print("ERROR: Reason: %s", str(e))
+        success = False
+    return success
 
 
 def create_fact():
@@ -555,8 +585,10 @@ def create_fact():
         global current_user
         db.session.add(current_user.tmp_fact)
         db.session.commit()
-    except:
+    except Exception as e:
         print("ERROR: Failed to add fact %s" % current_user.tmp_fact)
+        print("ERROR: Reason: %s", str(e))
+
         success = False
     return success
 
@@ -575,8 +607,9 @@ def update_fact(fact_id):
         fact.question = current_user.tmp_fact.question
         fact.answer = current_user.tmp_fact.answer
         db.session.commit()
-    except:
+    except Exception as e:
         print("ERROR: Failed to update fact %s" % current_user.tmp_fact)
+        print("ERROR: Reason: %s", str(e))
         success = False
     return success
 
@@ -616,18 +649,24 @@ def get_user_facts(sender_id):
     return get_user(sender_id).facts
 
 
-def get_facts_for_display(sender_id, include_confidence_and_last_seen=False):
+def get_facts_for_display(sender_id, include_metadata=False):
     return_msg = ""
     for fact in get_user_facts(sender_id):
         return_msg += "Id: %d\n" % fact.id
         return_msg += "Question: %s\n" % fact.question
         return_msg += "Answer: %s\n" % fact.answer
-        if include_confidence_and_last_seen:
-            return_msg += "Confidence: %s\n" % fact.confidence
-            return_msg += "Last Seen: %s\n\n" % "{:%B %d, %Y}".format(fact.last_seen)
+        if include_metadata:
+            return_msg += "Easiness: %s\n" % fact.easiness
+            return_msg += "Consecutive Correct Answers: %s\n" % fact.consecutive_correct_answers
+            return_msg += "Next Study Time: %s\n" % fact.serialize_date_time('next_due_date')
+            return_msg += "Last Seen: %s\n\n" % fact.serialize_date_time('last_seen')
     return return_msg
 
 
+def parse_date_time(date_time):
+    if isinstance(date_time, str):
+        return parser.parse(date_time)
+    return None
 
 # ===============================================================================
 # Main
