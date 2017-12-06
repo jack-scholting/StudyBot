@@ -246,7 +246,7 @@ def handle_messages():
                                     elif (strongest_intent == "silence_studying"):
                                         duration_seconds = get_nlp_duration(nlp['entities'], MIN_CONFIDENCE_THRESHOLD)
                                         if (duration_seconds):
-                                            bot_msg = "Ok, you want to silence study notifications until " + duration_seconds
+                                            bot_msg = "Ok, you want to silence study notifications until " + str(duration_seconds)
                                             bot_msg = bot_msg + ".\nIs that right?"
                                         else:
                                             bot_msg = "Ok, how long do you want to silence notifications for?"
