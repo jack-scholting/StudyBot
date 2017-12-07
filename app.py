@@ -303,6 +303,7 @@ def handle_messages():
                                 set_convo_state(sender_id, State.WAITING_FOR_STUDY_EASINESS)
 
                             elif (convo_state == State.WAITING_FOR_STUDY_EASINESS):
+                                #TODO add a more robust check.
                                 if (sender_msg.isdigit and (int(sender_msg) >= 0) and (int(sender_msg) <= 5)):
                                     performance_rating = int(sender_msg)
                                     update_next_fact_per_SM2_alg(performance_rating)
