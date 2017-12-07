@@ -367,10 +367,10 @@ def handle_messages():
 # ===============================================================================
 # Helper Routines
 # ===============================================================================
-def set_silence_time(sender_id, duration):
+def set_silence_time(sender_id, duration_seconds):
     user = get_user(sender_id)
     print("DEBUG: Previous silence time: " + str(user.silence_end_time))
-    print("DEBUG: Silence duration (sec) " + str(duration))
+    print("DEBUG: Silence duration (sec) " + str(duration_seconds))
     now = time.time() # Unix timestamp
     target_time = now + duration_seconds
     target_datetime = datetime.fromtimestamp(target_time).replace(tzinfo=pytz.utc)
