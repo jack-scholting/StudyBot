@@ -458,7 +458,11 @@ def set_user(user_data):
 
 def get_next_fact_to_study(user_id):
     #TODO - pull fact from database according to SR algorithm.
-    fact = Fact.query.filter_by(user_id=user_id).first()
+    facts = get_user_facts(user_id)
+    #TODO hack
+    for fact in facts:
+        return(fact)
+    #fact = Fact.query.filter_by(user_id=user_id).first()
     return (fact)
 
 def update_next_fact_per_SM2_alg(performance_rating):
