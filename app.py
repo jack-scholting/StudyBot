@@ -12,6 +12,9 @@ import enum
 import redis
 import time
 
+
+print("DEBUG: Executing init.")
+
 # Create the Flask application instance.
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ['DATABASE_URL']
