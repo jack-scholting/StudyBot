@@ -295,7 +295,7 @@ def handle_messages():
                                         bot_msg = "I'm not sure what you mean."
                                         set_convo_state(sender_id, current_user.state)
 
-                            elif (convo_state == State.WAITING_FOR_FACT_TO_CHANGE):
+                            elif (convo_state == State.WAITING_FOR_STUDY_ANSWER):
                                 fact = get_next_fact_to_study(sender_id)
                                 bot_msg = "Here is the answer:\n"
                                 bot_msg = bot_msg + fact.answer
