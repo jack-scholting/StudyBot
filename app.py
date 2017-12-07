@@ -272,7 +272,7 @@ def handle_messages():
                                             target_time = now + duration_seconds
                                             target_datetime = datetime.fromtimestamp(target_time)
                                             bot_msg = "Ok, silencing study notifications until " + str(target_datetime) + "."
-                                            set_silence_time(target_datetime)
+                                            set_silence_time(sender_id, target_datetime)
                                         else:
                                             bot_msg = "Ok, how long do you want to silence notifications for?"
                                             set_convo_state(sender_id, State.WAITING_FOR_SILENCE_DURATION)
