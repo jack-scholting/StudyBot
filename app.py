@@ -268,11 +268,8 @@ def handle_messages():
                                     elif (strongest_intent == "silence_studying"):
                                         duration_seconds = get_nlp_duration(nlp['entities'], MIN_CONFIDENCE_THRESHOLD)
                                         if (duration_seconds):
-                                            now = time.time() # Unix timestamp
-                                            target_time = now + duration_seconds
-                                            target_datetime = datetime.fromtimestamp(target_time)
+                                            target_datetime = set_silence_time(sender_id, duration_seconds)
                                             bot_msg = "Ok, silencing study notifications until " + str(target_datetime) + "."
-                                            set_silence_time(sender_id, target_datetime)
                                         else:
                                             bot_msg = "Ok, how long do you want to silence notifications for?"
                                             set_convo_state(sender_id, State.WAITING_FOR_SILENCE_DURATION)
@@ -370,12 +367,18 @@ def handle_messages():
 # ===============================================================================
 # Helper Routines
 # ===============================================================================
-def set_silence_time(sender_id, target_datetime):
+def set_silence_time(sender_id, duration):
     user = get_user(sender_id)
     print("DEBUG: Previous silence time: " + str(user.silence_end_time))
+    print("DEBUG: Silence duration (sec) " + str(duration))
+    now = time.time() # Unix timestamp
+    target_time = now + duration_seconds
+    target_datetime = datetime.fromtimestamp(target_time).replace(tzinfo=pytz.utc)
+    target_datetime = target_datetime.replace(tzinfo=pytz.utc)
     user.silence_end_time = target_datetime
     print("DEBUG: New silence time: " + str(user.silence_end_time))
     db.session.commit()
+    return(user.silence_end_time)
 
 
 def get_nlp_duration(nlp_entities, min_conf_threshold):
