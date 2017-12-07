@@ -272,7 +272,7 @@ def handle_messages():
                                             target_time = now + duration_seconds
                                             target_datetime = datetime.fromtimestamp(target_time)
                                             bot_msg = "Ok, silencing study notifications until " + str(target_datetime) + "."
-                                            #TODO - updated database silence datetime.
+                                            set_silence_time(target_datetime)
                                         else:
                                             bot_msg = "Ok, how long do you want to silence notifications for?"
                                             set_convo_state(sender_id, State.WAITING_FOR_SILENCE_DURATION)
@@ -370,6 +370,14 @@ def handle_messages():
 # ===============================================================================
 # Helper Routines
 # ===============================================================================
+def set_silence_time(sender_id, target_datetime):
+    user = get_user(sender_id)
+    print("DEBUG: Previous silence time: " + str(user.silence_end_time))
+    user.silence_end_time = target_datetime
+    print("DEBUG: New silence time: " + str(user.silence_end_time))
+    db.session.commit()
+
+
 def get_nlp_duration(nlp_entities, min_conf_threshold):
     """
     This function returns "None" if no duration value can be found.
@@ -382,6 +390,7 @@ def get_nlp_duration(nlp_entities, min_conf_threshold):
             return_val = nlp_entities['duration'][0]['normalized']['value']
 
     return(return_val)
+
 
 def restore_convo_state(sender_id):
     user_data = cache.get(sender_id)
