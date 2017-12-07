@@ -150,6 +150,7 @@ MIN_CONFIDENCE_THRESHOLD = 0.7
 CACHE_EXPIRATION_IN_SECONDS = 300
 
 # Confirmation words for delete
+#TODO consider creating a wit.ai intent for positive and negative responses
 CONFIRMATIONS = [
     "yes",
     "yea",
@@ -168,6 +169,8 @@ class State(enum.Enum):
     WAITING_FOR_FACT_TO_DELETE = 4
     CONFIRM_FACT_DELETE = 5
     WAITING_FOR_SILENCE_DURATION = 6
+    WAITING_FOR_STUDY_ANSWER = 7
+    WAITING_FOR_STUDY_EASINESS = 8
 
 
 #===============================================================================
@@ -283,12 +286,31 @@ def handle_messages():
                                         send_facts_for_display(sender_id, "Ok, which fact do you want to delete?")
                                         set_convo_state(sender_id, State.WAITING_FOR_FACT_TO_DELETE)
                                     elif (strongest_intent == "study_next_fact"):
-                                        #TODO - start study flow
-                                        pass
+                                        fact = get_next_fact_to_study(sender_id)
+                                        bot_msg = "Ok, let's study!\n"
+                                        bot_msg = bot_msg + fact.question
+                                        set_convo_state(sender_id, State.WAITING_FOR_STUDY_ANSWER)
                                     elif (strongest_intent == "default_intent"):
                                         #TODO - provide user some suggested actions to help them.
                                         bot_msg = "I'm not sure what you mean."
                                         set_convo_state(sender_id, current_user.state)
+
+                            elif (convo_state == State.WAITING_FOR_FACT_TO_CHANGE):
+                                fact = get_next_fact_to_study(sender_id)
+                                bot_msg = "Here is the answer:\n"
+                                bot_msg = bot_msg + fact.answer
+                                bot_msg = bot_msg + "\nHow hard was that on a scale from 0 (impossible) to 5 (trivial)?"
+                                set_convo_state(sender_id, State.WAITING_FOR_STUDY_EASINESS)
+
+                            elif (convo_state == State.WAITING_FOR_STUDY_EASINESS):
+                                if (sender_msg.isdigit and (int(sender_msg) >= 0) and (int(sender_msg) <= 5)):
+                                    performance_rating = int(sender_msg)
+                                    update_next_fact_per_SM2_alg(performance_rating)
+                                    bot_msg = "Got it, fact studied!"
+                                    set_convo_state(sender_id, State.DEFAULT)
+                                else:
+                                    bot_msg = "I didn't get a number from that, can you try again on a scale from 0 to 5?"
+                                    set_convo_state(sender_id, State.WAITING_FOR_STUDY_EASINESS)
 
                             elif (convo_state == State.WAITING_FOR_FACT_TO_CHANGE):
                                 tmp_fact = get_fact(sender_msg.decode("unicode_escape"))
@@ -344,11 +366,8 @@ def handle_messages():
                             elif (convo_state == State.WAITING_FOR_SILENCE_DURATION):
                                 duration_seconds = get_nlp_duration(nlp['entities'], MIN_CONFIDENCE_THRESHOLD)
                                 if (duration_seconds):
-                                    now = time.time() # Unix timestamp
-                                    target_time = now + duration_seconds
-                                    target_datetime = datetime.fromtimestamp(target_time)
+                                    target_datetime = set_silence_time(sender_id, duration_seconds)
                                     bot_msg = "Ok, silencing study notifications until " + str(target_datetime) + "."
-                                    #TODO - updated database silence datetime.
                                 else:
                                     bot_msg = "Sorry, I couldn't get a duration from that."
                                 set_convo_state(sender_id, State.DEFAULT)
@@ -439,6 +458,11 @@ def set_user(user_data):
 
 def get_next_fact_to_study(user_id):
     #TODO - pull fact from database according to SR algorithm.
+    fact = Fact.query.filter_by(user_id=user_id).first()
+    return (fact)
+
+def update_next_fact_per_SM2_alg(performance_rating):
+    #TODO
     pass
 
 
