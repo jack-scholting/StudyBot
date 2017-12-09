@@ -640,7 +640,7 @@ def create_fact():
     success = True
     try:
         global current_user
-        current.user.tmp_fact.next_due_date = datetime.now() + timedelta(days=1)
+        current_user.user.tmp_fact.next_due_date = datetime.now() + timedelta(days=1)
         db.session.add(current_user.tmp_fact)
         db.session.commit()
     except Exception as e:
