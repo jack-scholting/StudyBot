@@ -1,6 +1,6 @@
 from flask import Flask, request
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from dateutil import parser
 
@@ -402,14 +402,11 @@ def handle_messages():
 # Helper Routines
 # ===============================================================================
 def get_next_fact_to_study(user_id):
-    #TODO - pull fact from database according to SR algorithm.
-    # need all the facts for a specific user, and ordered by next_due_date
-    #fact = Fact.query.filter_by(user_id=user_id).all().order_by('next_due_date').limit(1)
-    #print(fact)
-    #print(type(fact))
+    """
+    Get the fact with the nearest next_due_date.
+    """
     facts = get_user_facts(user_id)
     facts.sort(key=lambda x: x.next_due_date)
-    print(facts[0])
     return (facts[0])
 
 def update_next_fact_per_SM2_alg(performance_rating):
@@ -640,10 +637,10 @@ def create_user(sender_id):
 
 
 def create_fact():
-    # TODO - we need all facts to have a next_due_date, not sure what that should be yet.
     success = True
     try:
         global current_user
+        current.user.tmp_fact.next_due_date = datetime.now() + timedelta(days=1)
         db.session.add(current_user.tmp_fact)
         db.session.commit()
     except Exception as e:
