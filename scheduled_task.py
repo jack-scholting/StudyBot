@@ -2,28 +2,18 @@ import datetime
 import app
 
 #===============================================================================
-# Helper Routines
-#===============================================================================
-def get_all_users():
-    #TODO implement
-    return []
-
-
-def get_next_fact(user):
-    #TODO implement
-    pass
-
-#===============================================================================
 # Main
 #===============================================================================
 if __name__ == '__main__':
     print("DEBUG: Periodic Task is running!")
 
-    app.send_message(1694355543971879, "Testing push message!", False)
+    #TODO may need some logic to randomize study prompts.
 
     all_users = get_all_users()
     for user in all_users:
         if (user.silence_end_time < datetime.datetime.now()):
-            next_fact = get_next_fact(user)
-            if (next_fact):
-                pass #TODO - start dialog with user to study fact
+            fact = get_next_fact_to_study(user.id)
+            if (fact):
+                app.send_message(user.fb_id, "Time to study!", False)
+                app.send_message(user.fb_id, fact.question, False)
+                app.set_convo_state(sender_id, State.WAITING_FOR_STUDY_ANSWER)

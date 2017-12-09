@@ -409,8 +409,17 @@ def get_next_fact_to_study(user_id):
     Get the fact with the nearest next_due_date.
     """
     facts = get_user_facts(user_id)
-    facts.sort(key=lambda x: x.next_due_date)
-    return (facts[0])
+    fact_return = None
+    if (facts):
+        # Try/except block needed for now, since some facts don't have an initialized due date.
+        try:
+            facts.sort(key=lambda x: x.next_due_date)
+            fact_return = facts[0]
+        except Exception:
+            print("ERROR: Exception when sorting facts in get_next_fact_to_study")
+
+    return (fact_return)
+
 
 def update_next_fact_per_SM2_alg(user_id, perf_rating):
     assert ((perf_rating >= 0) and (perf_rating <= 5))
@@ -625,6 +634,10 @@ def get_users_firstname(user_id):
 
 def get_user(user_id):
     return User.query.filter_by(fb_id=user_id).one_or_none()
+
+
+def get_all_users():
+    return User.query.all()
 
 
 def is_first_time_user(sender_id):
