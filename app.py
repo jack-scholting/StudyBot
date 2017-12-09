@@ -306,6 +306,7 @@ def handle_messages():
                                 set_convo_state(sender_id, State.WAITING_FOR_STUDY_EASINESS)
 
                             elif (convo_state == State.WAITING_FOR_STUDY_EASINESS):
+                                # Get a valid integer from the string response.
                                 valid_rating = False
                                 try:
                                     performance_rating = int(sender_msg)
@@ -407,7 +408,8 @@ def get_next_fact_to_study(user_id):
     #print(fact)
     #print(type(fact))
     facts = get_user_facts(user_id)
-    print(facts)
+    facts.sort(key=lambda x: x.next_due_date)
+    print(facts[0])
     return (facts[0])
 
 def update_next_fact_per_SM2_alg(performance_rating):
