@@ -447,7 +447,8 @@ def update_next_fact_per_SM2_alg(user_id, perf_rating):
     fact.next_due_date = fact.next_due_date + timedelta(days=interval)
 
     # Update easiness.
-    fact.easiness = max(1.3, fact.easiness + (0.1 - (5-perf_rating) * (0.8 + (5-perf_rating) * 0.2)))
+    new_easiness = fact.easiness + (0.1 - (5-perf_rating) * (0.8 + (5-perf_rating) * 0.2))
+    fact.easiness = max(Decimal(1.3), new_easiness)
 
     # Commit changes
     db.session.commit()
