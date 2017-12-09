@@ -397,10 +397,11 @@ def handle_messages():
 def get_next_fact_to_study(user_id):
     #TODO - pull fact from database according to SR algorithm.
     # need all the facts for a specific user, and ordered by next_due_date
-    fact = Fact.query.filter_by(user_id=user_id).all().order_by('next_due_date').limit(1)
-    print(fact)
-    print(type(fact))
-    #facts = get_user_facts(user_id)
+    #fact = Fact.query.filter_by(user_id=user_id).all().order_by('next_due_date').limit(1)
+    #print(fact)
+    #print(type(fact))
+    facts = get_user_facts(user_id)
+    print(facts)
     return (fact)
 
 def update_next_fact_per_SM2_alg(performance_rating):
