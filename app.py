@@ -402,7 +402,7 @@ def get_next_fact_to_study(user_id):
     #print(type(fact))
     facts = get_user_facts(user_id)
     print(facts)
-    return (fact)
+    return (facts[0])
 
 def update_next_fact_per_SM2_alg(performance_rating):
     #TODO
