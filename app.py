@@ -140,6 +140,9 @@ RANDOM_PHRASES = [
     "You want to study right now, %s? Nerd Alert! Nerds are so in right now!"
 ]
 
+#TODO - implement
+USAGE_INSTRUCTIONS = ""
+
 """
 Note: This is a trade-off between "precision" and "recall" as discussed here:
 https://wit.ai/docs/recipes#which-confidence-threshold-should-i-use
@@ -291,8 +294,8 @@ def handle_messages():
                                         bot_msg = bot_msg + fact.question
                                         set_convo_state(sender_id, State.WAITING_FOR_STUDY_ANSWER)
                                     elif (strongest_intent == "default_intent"):
-                                        #TODO - provide user some suggested actions to help them.
                                         bot_msg = "I'm not sure what you mean."
+                                        bot_msg = bot_msg + USAGE_INSTRUCTIONS
                                         set_convo_state(sender_id, current_user.state)
 
                             elif (convo_state == State.WAITING_FOR_STUDY_ANSWER):
@@ -391,12 +394,26 @@ def handle_messages():
 # ===============================================================================
 # Helper Routines
 # ===============================================================================
+def get_next_fact_to_study(user_id):
+    #TODO - pull fact from database according to SR algorithm.
+    # need all the facts for a specific user, and ordered by next_due_date
+    fact = Fact.query.filter_by(user_id=user_id).order_by('next_due_date').limit(1)
+    #facts = get_user_facts(user_id)
+    return (fact)
+
+def update_next_fact_per_SM2_alg(performance_rating):
+    #TODO
+    pass
+
+
 def set_silence_time(sender_id, duration_seconds):
     user = get_user(sender_id)
     print("DEBUG: Previous silence time: " + str(user.silence_end_time))
     print("DEBUG: Silence duration (sec) " + str(duration_seconds))
     now = time.time() # Unix timestamp
     target_time = now + duration_seconds
+    # Note: The timezone information must be added in order to store the datetime
+    #   in the database.
     target_datetime = datetime.fromtimestamp(target_time).replace(tzinfo=pytz.utc)
     target_datetime = target_datetime.replace(tzinfo=pytz.utc)
     user.silence_end_time = target_datetime
@@ -455,20 +472,6 @@ def set_user(user_data):
     global current_user
     current_user = user_data
     print(current_user.serialize)
-
-
-def get_next_fact_to_study(user_id):
-    #TODO - pull fact from database according to SR algorithm.
-    facts = get_user_facts(user_id)
-    #TODO hack
-    for fact in facts:
-        return(fact)
-    #fact = Fact.query.filter_by(user_id=user_id).first()
-    return (fact)
-
-def update_next_fact_per_SM2_alg(performance_rating):
-    #TODO
-    pass
 
 
 def msg_contains_greeting(nlp_entities, min_conf_threshold):
@@ -601,8 +604,8 @@ def is_first_time_user(sender_id):
 def send_welcome_message(sender_id):
     firstname = get_users_firstname(sender_id)
     msg = "Hello "+firstname+", I'm StudyBot. Nice to meet you!"
+    msg = msg + USAGE_INSTRUCTIONS
     send_message(sender_id, msg, is_response=True)
-    #TODO Add instructions for the user.
 
 
 def send_greeting_message(sender_id):
