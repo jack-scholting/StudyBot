@@ -443,7 +443,7 @@ def update_next_fact_per_SM2_alg(user_id, perf_rating):
     elif (fact.consecutive_correct_answers == 2):
         interval = 6
     else:
-        interval = fact.consecutive_correct_answers * fact.easiness
+        interval = int(fact.consecutive_correct_answers * fact.easiness)
     fact.next_due_date = fact.next_due_date + timedelta(days=interval)
 
     # Update easiness.
