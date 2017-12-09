@@ -397,7 +397,9 @@ def handle_messages():
 def get_next_fact_to_study(user_id):
     #TODO - pull fact from database according to SR algorithm.
     # need all the facts for a specific user, and ordered by next_due_date
-    fact = Fact.query.filter_by(user_id=user_id).order_by('next_due_date').limit(1)
+    fact = Fact.query.filter_by(user_id=user_id)#.order_by('next_due_date').limit(1)
+    print(fact)
+    print(type(fact))
     #facts = get_user_facts(user_id)
     return (fact)
 
