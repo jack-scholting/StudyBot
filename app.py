@@ -149,6 +149,9 @@ https://wit.ai/docs/recipes#which-confidence-threshold-should-i-use
 """
 MIN_CONFIDENCE_THRESHOLD = 0.7
 
+# Value described by the SM2 Algorithm.
+DEFAULT_EASINESS = 2.5
+
 # Expire cached entries after 5 minutes
 CACHE_EXPIRATION_IN_SECONDS = 300
 
@@ -316,7 +319,7 @@ def handle_messages():
                                     pass # Error handled by "valid_rating" flag.
 
                                 if (valid_rating):
-                                    update_next_fact_per_SM2_alg(performance_rating)
+                                    update_next_fact_per_SM2_alg(sender_id, performance_rating)
                                     bot_msg = "Got it, fact studied!"
                                     set_convo_state(sender_id, State.DEFAULT)
                                 else:
@@ -409,10 +412,32 @@ def get_next_fact_to_study(user_id):
     facts.sort(key=lambda x: x.next_due_date)
     return (facts[0])
 
-def update_next_fact_per_SM2_alg(performance_rating):
-    #TODO
-    pass
+def update_next_fact_per_SM2_alg(user_id, perf_rating):
+    assert ((perf_rating >= 0) and (perf_rating <= 5))
 
+    #TODO - easiness needs to be initialized to 2.5
+    fact = get_next_fact_to_study(user_id)
+
+    # Update consecutive correct answers.
+    if (perf_rating >= 3):
+        fact.consecutive_correct_answers = fact.consecutive_correct_answers + 1
+    else:
+        fact.consecutive_correct_answers = 0
+
+    # Update next due date.
+    if (fact.consecutive_correct_answers == 1):
+        interval = 1
+    elif (fact.consecutive_correct_answers == 2):
+        interval = 6
+    else:
+        interval = fact.consecutive_correct_answers * fact.easiness
+    fact.next_due_date = fact.next_due_date + timedelta(days=interval)
+
+    # Update easiness.
+    fact.easiness = max(1.3, fact.easiness + (0.1 - (5-perf_rating) * (0.8 + (5-perf_rating) * 0.2)))
+
+    # Commit changes
+    db.session.commit()
 
 def set_silence_time(sender_id, duration_seconds):
     user = get_user(sender_id)
@@ -640,7 +665,9 @@ def create_fact():
     success = True
     try:
         global current_user
+        # Set the first study time 1 day from when the fact was added.
         current_user.tmp_fact.next_due_date = datetime.now() + timedelta(days=1)
+        current_user.tmp_fact.easiness = DEFAULT_EASINESS
         db.session.add(current_user.tmp_fact)
         db.session.commit()
     except Exception as e:
