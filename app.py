@@ -293,9 +293,13 @@ def handle_messages():
                                         set_convo_state(sender_id, State.WAITING_FOR_FACT_TO_DELETE)
                                     elif (strongest_intent == "study_next_fact"):
                                         fact = get_next_fact_to_study(sender_id)
-                                        bot_msg = "Ok, let's study!\n"
-                                        bot_msg = bot_msg + fact.question
-                                        set_convo_state(sender_id, State.WAITING_FOR_STUDY_ANSWER)
+                                        if (fact):
+                                            bot_msg = "Ok, let's study!\n"
+                                            bot_msg = bot_msg + fact.question
+                                            set_convo_state(sender_id, State.WAITING_FOR_STUDY_ANSWER)
+                                        else:
+                                            bot_msg = "No studying needed! You're all caught up."
+                                            set_convo_state(sender_id, State.DEFAULT)
                                     elif (strongest_intent == "default_intent"):
                                         bot_msg = "I'm not sure what you mean."
                                         bot_msg = bot_msg + USAGE_INSTRUCTIONS
