@@ -306,9 +306,15 @@ def handle_messages():
                                 set_convo_state(sender_id, State.WAITING_FOR_STUDY_EASINESS)
 
                             elif (convo_state == State.WAITING_FOR_STUDY_EASINESS):
-                                #TODO add a more robust check.
-                                if (sender_msg.isdigit and (int(sender_msg) >= 0) and (int(sender_msg) <= 5)):
+                                valid_rating = False
+                                try:
                                     performance_rating = int(sender_msg)
+                                    if ((performance_rating >= 0) and (performance_rating <= 5)):
+                                        valid_rating = True
+                                except Exception:
+                                    pass # Error handled by "valid_rating" flag.
+
+                                if (valid_rating):
                                     update_next_fact_per_SM2_alg(performance_rating)
                                     bot_msg = "Got it, fact studied!"
                                     set_convo_state(sender_id, State.DEFAULT)
@@ -632,6 +638,7 @@ def create_user(sender_id):
 
 
 def create_fact():
+    # TODO - we need all facts to have a next_due_date, not sure what that should be yet.
     success = True
     try:
         global current_user
