@@ -285,7 +285,7 @@ def handle_messages():
                                                 bot_msg = "Whoops! We don't have a fact for you. Try viewing your facts to get the ID."
                                                 state = State.DEFAULT
                                         else:
-                                            bot_msg = "Ok, which fact do you want details for?"
+                                            bot_msg = "Ok, which fact do you want to change?"
                                         set_convo_state(sender_id, state)
                                     elif (strongest_intent == "silence_studying"):
                                         duration_seconds = get_nlp_duration(nlp['entities'], MIN_CONFIDENCE_THRESHOLD)
