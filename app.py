@@ -87,8 +87,8 @@ class User(db.Model):
        return [item.serialize for item in self.facts]
 
     def serialize_date_time(self):
-        if isinstance(self.last_seen, datetime):
-            return self.last_seen.isoformat()
+        if isinstance(self.silence_end_time, datetime):
+            return self.silence_end_time.isoformat()
         return None
 
 class Fact(db.Model):
@@ -451,11 +451,11 @@ def handle_messages():
 # ===============================================================================
 # Helper Routines
 # ===============================================================================
-def get_next_fact_to_study(user_id):
+def get_next_fact_to_study(sender_id):
     """
     Get the fact with the nearest next_due_date.
     """
-    facts = get_user_facts(user_id)
+    facts = get_user_facts(sender_id)
     fact_return = None
     if (facts):
         # Try/except block needed for now, since some facts don't have an initialized due date.
@@ -685,7 +685,6 @@ def get_user(user_id):
 
 def get_all_users():
     return User.query.all()
-
 
 def is_first_time_user(sender_id):
     print("DEBUG: Checking if user %s exists" % sender_id)
