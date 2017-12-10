@@ -140,13 +140,8 @@ RANDOM_PHRASES = [
     "You want to study right now, %s? Nerd Alert! Nerds are so in right now!"
 ]
 
-USAGE_INSTRUCTIONS = ("Below is a list of my primary functionality:\n" +
-    "- 'I want to add a fact.' " +
-    "- 'I want to view all facts.'" +
-    "- 'I want to change a fact.'" +
-    "- 'I want to delete a fact.'" +
-    "- 'I want to study.'" +
-    "- 'I want to silence studying for x days.'")
+#TODO - implement
+USAGE_INSTRUCTIONS = ""
 
 """
 Note: This is a trade-off between "precision" and "recall" as discussed here:
