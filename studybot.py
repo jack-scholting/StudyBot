@@ -33,8 +33,13 @@ RANDOM_PHRASES = [
     "You want to study right now, %s? Nerd Alert! Nerds are so in right now!"
 ]
 
-#TODO - implement
-USAGE_INSTRUCTIONS = ""
+USAGE_INSTRUCTIONS = ("Below is a list of my primary functionality:\n" +
+    "- 'I want to add a fact.' " +
+    "- 'I want to view all facts.'" +
+    "- 'I want to change a fact.'" +
+    "- 'I want to delete a fact.'" +
+    "- 'I want to study.'" +
+    "- 'I want to silence studying for x days.'")
 
 """
 Note: This is a trade-off between "precision" and "recall" as discussed here:
@@ -159,16 +164,16 @@ class ConvoState:
 The following states are used to create a conversation flow.
 """
 class State(enum.Enum):
-    DEFAULT = 0
-    WAITING_FOR_FACT_QUESTION = 1
-    WAITING_FOR_FACT_ANSWER = 2
-    WAITING_FOR_FACT_TO_CHANGE = 3
-    WAITING_FOR_FACT_TO_DELETE = 4
-    CONFIRM_FACT_DELETE = 5
-    WAITING_FOR_SILENCE_DURATION = 6
-    WAITING_FOR_STUDY_ANSWER = 7
-    WAITING_FOR_STUDY_EASINESS = 8
-    WAITING_FOR_FACT_TO_DISPLAY = 9
+    DEFAULT                           = 0
+    EXPECTING_FACT_QUESTION           = 1
+    EXPECTING_FACT_ANSWER             = 2
+    EXPECTING_FACT_ID_FOR_CHANGE      = 3
+    EXPECTING_FACT_ID_FOR_DELETE      = 4
+    EXPECTING_CONFIRMATION_FOR_DELETE = 5
+    EXPECTING_DURATION_FOR_SILENCE    = 6
+    EXPECTING_STUDY_ANSWER            = 7
+    EXPECTING_STUDY_PERF_RATING       = 8
+    EXPECTING_FACT_ID_FOR_DISPLAY     = 9
 
 
 #===============================================================================
@@ -266,16 +271,16 @@ def handle_messages():
                                     if (strongest_intent == "add_fact"):
                                         bot_msg = "Ok, let's add that new fact. What is the question?"
                                         current_user.tmp_fact = Fact(user_id=current_user.user_id)
-                                        set_convo_state(sender_id, State.WAITING_FOR_FACT_QUESTION)
+                                        set_convo_state(sender_id, State.EXPECTING_FACT_QUESTION)
                                     elif (strongest_intent == "change_fact"):
                                         fact_id = extract_fact_id(sender_msg.decode("unicode_escape"))
-                                        state = State.WAITING_FOR_FACT_TO_CHANGE
+                                        state = State.EXPECTING_FACT_ID_FOR_CHANGE
                                         if fact_id:
                                             tmp_fact = get_fact(fact_id)
                                             if tmp_fact:
                                                 current_user.tmp_fact = tmp_fact
                                                 bot_msg = "Ok, let's update that fact. What is the question?"
-                                                state = State.WAITING_FOR_FACT_QUESTION
+                                                state = State.EXPECTING_FACT_QUESTION
                                             else:
                                                 bot_msg = "Whoops! We don't have a fact for you. Try viewing your facts to get the ID."
                                                 state = State.DEFAULT
@@ -289,12 +294,12 @@ def handle_messages():
                                             bot_msg = "Ok, silencing study notifications until " + str(target_datetime) + "."
                                         else:
                                             bot_msg = "Ok, how long do you want to silence notifications for?"
-                                            set_convo_state(sender_id, State.WAITING_FOR_SILENCE_DURATION)
+                                            set_convo_state(sender_id, State.EXPECTING_DURATION_FOR_SILENCE)
                                     elif (strongest_intent == "view_facts"):
                                         send_facts_for_display(sender_id, "Ok, here are the facts we have.")
                                     elif (strongest_intent == "view_detailed_fact"):
                                         fact_id = extract_fact_id(sender_msg.decode("unicode_escape"))
-                                        state = State.WAITING_FOR_FACT_TO_DISPLAY
+                                        state = State.EXPECTING_FACT_ID_FOR_DISPLAY
                                         if fact_id:
                                             tmp_fact = get_fact(fact_id)
                                             if tmp_fact:
@@ -307,14 +312,14 @@ def handle_messages():
                                         set_convo_state(sender_id, state)
                                     elif (strongest_intent == "delete_fact"):
                                         fact_id = extract_fact_id(sender_msg.decode("unicode_escape"))
-                                        state = State.WAITING_FOR_FACT_TO_DELETE
+                                        state = State.EXPECTING_FACT_ID_FOR_DELETE
                                         if fact_id:
                                             tmp_fact = get_fact(fact_id)
                                             if tmp_fact:
                                                 current_user.tmp_fact = tmp_fact
                                                 bot_msg = "Are you sure you want to delete this fact?\n"
                                                 bot_msg += "Question: %s\n" % current_user.tmp_fact.question
-                                                state = State.CONFIRM_FACT_DELETE
+                                                state = State.EXPECTING_CONFIRMATION_FOR_DELETE
                                             else:
                                                 bot_msg = "Whoops! We don't have a fact for you. Try viewing your facts to get the ID."
                                                 state = State.DEFAULT
@@ -326,7 +331,7 @@ def handle_messages():
                                         if (fact):
                                             bot_msg = "Ok, let's study!\n"
                                             bot_msg = bot_msg + fact.question
-                                            set_convo_state(sender_id, State.WAITING_FOR_STUDY_ANSWER)
+                                            set_convo_state(sender_id, State.EXPECTING_STUDY_ANSWER)
                                         else:
                                             bot_msg = "No studying needed! You're all caught up."
                                             set_convo_state(sender_id, State.DEFAULT)
@@ -338,14 +343,14 @@ def handle_messages():
                                 bot_msg = "Ok, aborting that request."
                                 set_convo_state(sender_id, State.DEFAULT)
 
-                            elif (convo_state == State.WAITING_FOR_STUDY_ANSWER):
+                            elif (convo_state == State.EXPECTING_STUDY_ANSWER):
                                 fact = get_next_fact_to_study(sender_id)
                                 bot_msg = "Here is the answer:\n"
                                 bot_msg = bot_msg + fact.answer
                                 bot_msg = bot_msg + "\nHow hard was that on a scale from 0 (impossible) to 5 (trivial)?"
-                                set_convo_state(sender_id, State.WAITING_FOR_STUDY_EASINESS)
+                                set_convo_state(sender_id, State.EXPECTING_STUDY_PERF_RATING)
 
-                            elif (convo_state == State.WAITING_FOR_STUDY_EASINESS):
+                            elif (convo_state == State.EXPECTING_STUDY_PERF_RATING):
                                 # Get a valid integer from the string response.
                                 valid_rating = False
                                 try:
@@ -361,9 +366,9 @@ def handle_messages():
                                     set_convo_state(sender_id, State.DEFAULT)
                                 else:
                                     bot_msg = "I didn't get a number from that, can you try again on a scale from 0 to 5?"
-                                    set_convo_state(sender_id, State.WAITING_FOR_STUDY_EASINESS)
+                                    set_convo_state(sender_id, State.EXPECTING_STUDY_PERF_RATING)
 
-                            elif (convo_state == State.WAITING_FOR_FACT_TO_DISPLAY):
+                            elif (convo_state == State.EXPECTING_FACT_ID_FOR_DISPLAY):
                                 tmp_fact = get_fact(sender_msg.decode("unicode_escape"))
                                 if not tmp_fact:
                                     bot_msg = "Whoops! We don't have a fact for you. Try viewing your facts to get the ID."
@@ -372,7 +377,7 @@ def handle_messages():
                                     send_facts(sender_id, "Here's the fact.", [tmp_fact], True)
                                 set_convo_state(sender_id, State.DEFAULT)
 
-                            elif (convo_state == State.WAITING_FOR_FACT_TO_CHANGE):
+                            elif (convo_state == State.EXPECTING_FACT_ID_FOR_CHANGE):
                                 tmp_fact = get_fact(sender_msg.decode("unicode_escape"))
                                 if not tmp_fact:
                                     bot_msg = "Whoops! We don't have a fact for you. Try viewing your facts to get the ID."
@@ -380,10 +385,10 @@ def handle_messages():
                                 else:
                                     current_user.tmp_fact = tmp_fact
                                     bot_msg = "Ok, let's update that new fact. What is the question?"
-                                    state = State.WAITING_FOR_FACT_QUESTION
+                                    state = State.EXPECTING_FACT_QUESTION
                                 set_convo_state(sender_id, state)
 
-                            elif (convo_state == State.WAITING_FOR_FACT_TO_DELETE):
+                            elif (convo_state == State.EXPECTING_FACT_ID_FOR_DELETE):
                                 tmp_fact = get_fact(sender_msg.decode("unicode_escape"))
                                 if not tmp_fact:
                                     bot_msg = "Whoops! We don't have a fact for you. Try viewing your facts to get the ID."
@@ -392,10 +397,10 @@ def handle_messages():
                                     current_user.tmp_fact = tmp_fact
                                     bot_msg = "Are you sure you want to delete this fact?\n"
                                     bot_msg += "Question: %s\n" % current_user.tmp_fact.question
-                                    state = State.CONFIRM_FACT_DELETE
+                                    state = State.EXPECTING_CONFIRMATION_FOR_DELETE
                                 set_convo_state(sender_id, state)
 
-                            elif (convo_state == State.CONFIRM_FACT_DELETE):
+                            elif (convo_state == State.EXPECTING_CONFIRMATION_FOR_DELETE):
                                 confirmed = strongest_intent == "confirmation"
                                 if confirmed:
                                     if delete_fact(current_user.tmp_fact.id):
@@ -407,13 +412,13 @@ def handle_messages():
                                 current_user.tmp_fact = Fact(user_id=current_user.user_id)
                                 set_convo_state(sender_id, State.DEFAULT)
 
-                            elif (convo_state == State.WAITING_FOR_FACT_QUESTION):
+                            elif (convo_state == State.EXPECTING_FACT_QUESTION):
                                 current_user.tmp_fact.user_id = current_user.user_id
                                 current_user.tmp_fact.question = sender_msg.decode("unicode_escape")
-                                set_convo_state(sender_id, State.WAITING_FOR_FACT_ANSWER)
+                                set_convo_state(sender_id, State.EXPECTING_FACT_ANSWER)
                                 bot_msg = "Thanks, what's the answer to that question?"
 
-                            elif (convo_state == State.WAITING_FOR_FACT_ANSWER):
+                            elif (convo_state == State.EXPECTING_FACT_ANSWER):
                                 current_user.tmp_fact.answer = sender_msg.decode("unicode_escape")
                                 added_update = "update" if current_user.tmp_fact.id else "create"
                                 if upsert_fact(current_user.tmp_fact.id):
@@ -424,7 +429,7 @@ def handle_messages():
                                     bot_msg = "We couldn't %s that fact." % added_update
                                 set_convo_state(sender_id, State.DEFAULT)
 
-                            elif (convo_state == State.WAITING_FOR_SILENCE_DURATION):
+                            elif (convo_state == State.EXPECTING_DURATION_FOR_SILENCE):
                                 duration_seconds = get_nlp_duration(nlp['entities'], MIN_CONFIDENCE_THRESHOLD)
                                 if (duration_seconds):
                                     target_datetime = set_silence_time(sender_id, duration_seconds)
