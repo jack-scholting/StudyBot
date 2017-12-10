@@ -1,1 +1,1 @@
-web: gunicorn app:studybot --log-file=-
+web: gunicorn studybot:app --log-file=-
