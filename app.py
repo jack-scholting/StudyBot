@@ -754,7 +754,7 @@ def update_fact(fact_id):
         db.session.commit()
     except Exception as e:
         print("ERROR: Failed to update fact %s" % current_user.tmp_fact)
-        print("ERROR: Reason: %s", str(e))
+        print("ERROR: Reason: %s" % str(e))
         success = False
     return success
 
@@ -772,14 +772,25 @@ def get_fact(id):
 
 def get_fact_by_id(fact_id):
     global current_user
-    fact = Fact.query.filter_by(user_id=current_user.user_id, id=fact_id).one_or_none()
-    return fact
+    print("DEBUG: Getting fact by ID: %d" % fact_id)
+    try:
+        fact = Fact.query.filter_by(user_id=current_user.user_id, id=fact_id).one_or_none()
+        return fact
+    except Exception as e:
+        print("ERROR: Failed to retrieve fact: %s" % str(e))
+    return None
 
 
 def get_fact_by_question(question):
     global current_user
-    fact = Fact.query.filter_by(user_id=current_user.user_id, question=question).one_or_none()
-    return fact
+    print("DEBUG: Getting fact by Question: %s" % question)
+    try:
+        fact = Fact.query.filter_by(user_id=current_user.user_id, question=question).one_or_none()
+        return fact
+    except Exception as e:
+        print("ERROR: Failed to retrieve fact: %s" % str(e))
+    return None
+
 
 
 def parse_response_for_fact_id(fact_id_str):
