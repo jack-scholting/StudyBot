@@ -176,8 +176,8 @@ class State(enum.Enum):
 #===============================================================================
 current_user = None
 
-# Get Redis Cache
 cache = redis.from_url(os.environ.get("REDIS_URL"))
+
 
 #===============================================================================
 # Flask Routines
@@ -530,7 +530,13 @@ def get_nlp_duration(nlp_entities, min_conf_threshold):
 
 
 def restore_convo_state(sender_id):
-    user_data = cache.get(sender_id)
+    user_data = None
+    try:
+        user_data = cache.get(sender_id)
+    except Exception as e:
+        print("DEBUG: Cache not implemented")
+        print("DEBUG: %s" % str(e))
+
     if not user_data:
         print("DEBUG: Cache miss. Building convo state.")
         user_data = get_user(sender_id)
@@ -553,6 +559,10 @@ def restore_convo_state(sender_id):
 
 def set_convo_state(sender_id, new_state):
     global current_user
+    if not current_user:
+        print("DEBUG: New User Setup.")
+        user_data = get_user(sender_id)
+        current_user = ConvoState(user_data.id, State.DEFAULT)
     current_user.state = new_state
     set_user(current_user)
     print("DEBUG: Cache set.")
@@ -708,6 +718,8 @@ def send_greeting_message(sender_id):
     from random import randint
     phrase = RANDOM_PHRASES[randint(0, len(RANDOM_PHRASES)-1)]
     msg = phrase % get_users_firstname(sender_id)
+    print("DEBUG: Sending greeting message: %s" % msg)
+
     send_message(sender_id, msg, is_response=True)
 
 
