@@ -21,8 +21,36 @@ app.config['SQLALCHEMY_DATABASE_URI'] = os.environ['DATABASE_URL']
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
-# Get Redis Cache
-cache = redis.from_url(os.environ.get("REDIS_URL"))
+#===============================================================================
+# Constants
+#===============================================================================
+# See https://developers.facebook.com/docs/messenger-platform/reference/send-api
+SEND_API_URL = "https://graph.facebook.com/v2.6/me/messages"
+
+RANDOM_PHRASES = [
+    "Hey %s, how the heck are ya? Me, you ask? I'm feeling a little blue. :)",
+    "Studying again %s? Look at you! We gotta future Rhodes scholar here!",
+    "You want to study right now, %s? Nerd Alert! Nerds are so in right now!"
+]
+
+#TODO - implement
+USAGE_INSTRUCTIONS = ""
+
+"""
+Note: This is a trade-off between "precision" and "recall" as discussed here:
+https://wit.ai/docs/recipes#which-confidence-threshold-should-i-use
+"""
+MIN_CONFIDENCE_THRESHOLD = 0.7
+
+# Value described by the SM2 Algorithm.
+DEFAULT_EASINESS = 2.5
+
+# Expire cached entries after 5 minutes
+CACHE_EXPIRATION_IN_SECONDS = 300
+
+# FB Message Post Max Length
+FB_MAX_MESSAGE_LENGTH = 640
+
 
 #===============================================================================
 # DB Classes
@@ -59,8 +87,8 @@ class User(db.Model):
        return [item.serialize for item in self.facts]
 
     def serialize_date_time(self):
-        if isinstance(self.last_seen, datetime):
-            return self.last_seen.isoformat()
+        if isinstance(self.silence_end_time, datetime):
+            return self.silence_end_time.isoformat()
         return None
 
 class Fact(db.Model):
@@ -69,7 +97,7 @@ class Fact(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     question = db.Column(db.String, unique=True)
     answer = db.Column(db.String, nullable=False)
-    easiness = db.Column(db.Numeric, nullable=True, default=0)
+    easiness = db.Column(db.Numeric, nullable=True, default=DEFAULT_EASINESS)
     consecutive_correct_answers = db.Column(db.Integer, nullable=False, default=0)
     last_seen = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     next_due_date = db.Column(db.DateTime)
@@ -127,43 +155,6 @@ class ConvoState:
             'state': self.state.value
         }
 
-
-#===============================================================================
-# Constants
-#===============================================================================
-# See https://developers.facebook.com/docs/messenger-platform/reference/send-api
-SEND_API_URL = "https://graph.facebook.com/v2.6/me/messages"
-
-RANDOM_PHRASES = [
-    "Hey %s, how the heck are ya? Me, you ask? I'm feeling a little blue. :)",
-    "Studying again %s? Look at you! We gotta future Rhodes scholar here!",
-    "You want to study right now, %s? Nerd Alert! Nerds are so in right now!"
-]
-
-#TODO - implement
-USAGE_INSTRUCTIONS = ""
-
-"""
-Note: This is a trade-off between "precision" and "recall" as discussed here:
-https://wit.ai/docs/recipes#which-confidence-threshold-should-i-use
-"""
-MIN_CONFIDENCE_THRESHOLD = 0.7
-
-# Value described by the SM2 Algorithm.
-DEFAULT_EASINESS = 2.5
-
-# Expire cached entries after 5 minutes
-CACHE_EXPIRATION_IN_SECONDS = 300
-
-# Confirmation words for delete
-#TODO consider creating a wit.ai intent for positive and negative responses
-CONFIRMATIONS = [
-    "yes",
-    "yea",
-    "yep",
-    "y"
-]
-
 """
 The following states are used to create a conversation flow.
 """
@@ -177,12 +168,15 @@ class State(enum.Enum):
     WAITING_FOR_SILENCE_DURATION = 6
     WAITING_FOR_STUDY_ANSWER = 7
     WAITING_FOR_STUDY_EASINESS = 8
+    WAITING_FOR_FACT_TO_DISPLAY = 9
 
 
 #===============================================================================
 # Global Data
 #===============================================================================
 current_user = None
+
+cache = redis.from_url(os.environ.get("REDIS_URL"))
 
 
 #===============================================================================
@@ -262,22 +256,32 @@ def handle_messages():
                             convo_state = current_user.state
 
                             print("DEBUG: Conversation State: " + convo_state.name)
+                            strongest_intent = get_strongest_intent(nlp["entities"], MIN_CONFIDENCE_THRESHOLD)
+                            print("DEBUG: NLP intent: " + strongest_intent)
 
                             if (convo_state == State.DEFAULT):
                                 if (msg_contains_greeting(nlp["entities"], MIN_CONFIDENCE_THRESHOLD)):
                                     send_greeting_message(sender_id)
                                 else:
-
-                                    strongest_intent = get_strongest_intent(nlp["entities"], MIN_CONFIDENCE_THRESHOLD)
-                                    print("DEBUG: NLP intent: " + strongest_intent)
-
                                     if (strongest_intent == "add_fact"):
                                         bot_msg = "Ok, let's add that new fact. What is the question?"
                                         current_user.tmp_fact = Fact(user_id=current_user.user_id)
                                         set_convo_state(sender_id, State.WAITING_FOR_FACT_QUESTION)
                                     elif (strongest_intent == "change_fact"):
-                                        send_facts_for_display(sender_id, "Ok, which fact do you want to change?")
-                                        set_convo_state(sender_id, State.WAITING_FOR_FACT_TO_CHANGE)
+                                        fact_id = extract_fact_id(sender_msg.decode("unicode_escape"))
+                                        state = State.WAITING_FOR_FACT_TO_CHANGE
+                                        if fact_id:
+                                            tmp_fact = get_fact(fact_id)
+                                            if tmp_fact:
+                                                current_user.tmp_fact = tmp_fact
+                                                bot_msg = "Ok, let's update that fact. What is the question?"
+                                                state = State.WAITING_FOR_FACT_QUESTION
+                                            else:
+                                                bot_msg = "Whoops! We don't have a fact for you. Try viewing your facts to get the ID."
+                                                state = State.DEFAULT
+                                        else:
+                                            bot_msg = "Ok, which fact do you want details for?"
+                                        set_convo_state(sender_id, state)
                                     elif (strongest_intent == "silence_studying"):
                                         duration_seconds = get_nlp_duration(nlp['entities'], MIN_CONFIDENCE_THRESHOLD)
                                         if (duration_seconds):
@@ -287,10 +291,36 @@ def handle_messages():
                                             bot_msg = "Ok, how long do you want to silence notifications for?"
                                             set_convo_state(sender_id, State.WAITING_FOR_SILENCE_DURATION)
                                     elif (strongest_intent == "view_facts"):
-                                        send_facts_for_display(sender_id, "Ok, here are the facts we have.", True)
+                                        send_facts_for_display(sender_id, "Ok, here are the facts we have.")
+                                    elif (strongest_intent == "view_detailed_fact"):
+                                        fact_id = extract_fact_id(sender_msg.decode("unicode_escape"))
+                                        state = State.WAITING_FOR_FACT_TO_DISPLAY
+                                        if fact_id:
+                                            tmp_fact = get_fact(fact_id)
+                                            if tmp_fact:
+                                                send_facts(sender_id, "Here's the fact.", [tmp_fact], True)
+                                            else:
+                                                bot_msg = "Whoops! We don't have a fact for you. Try viewing your facts to get the ID."
+                                            state = State.DEFAULT
+                                        else:
+                                            bot_msg = "Ok, which fact do you want details for?"
+                                        set_convo_state(sender_id, state)
                                     elif (strongest_intent == "delete_fact"):
-                                        send_facts_for_display(sender_id, "Ok, which fact do you want to delete?")
-                                        set_convo_state(sender_id, State.WAITING_FOR_FACT_TO_DELETE)
+                                        fact_id = extract_fact_id(sender_msg.decode("unicode_escape"))
+                                        state = State.WAITING_FOR_FACT_TO_DELETE
+                                        if fact_id:
+                                            tmp_fact = get_fact(fact_id)
+                                            if tmp_fact:
+                                                current_user.tmp_fact = tmp_fact
+                                                bot_msg = "Are you sure you want to delete this fact?\n"
+                                                bot_msg += "Question: %s\n" % current_user.tmp_fact.question
+                                                state = State.CONFIRM_FACT_DELETE
+                                            else:
+                                                bot_msg = "Whoops! We don't have a fact for you. Try viewing your facts to get the ID."
+                                                state = State.DEFAULT
+                                        else:
+                                            bot_msg = "Ok, which fact do you to delete?"
+                                        set_convo_state(sender_id, state)
                                     elif (strongest_intent == "study_next_fact"):
                                         fact = get_next_fact_to_study(sender_id)
                                         if (fact):
@@ -304,6 +334,9 @@ def handle_messages():
                                         bot_msg = "I'm not sure what you mean."
                                         bot_msg = bot_msg + USAGE_INSTRUCTIONS
                                         set_convo_state(sender_id, current_user.state)
+                            elif (strongest_intent == "abort"):
+                                bot_msg = "Ok, aborting that request."
+                                set_convo_state(sender_id, State.DEFAULT)
 
                             elif (convo_state == State.WAITING_FOR_STUDY_ANSWER):
                                 fact = get_next_fact_to_study(sender_id)
@@ -330,6 +363,15 @@ def handle_messages():
                                     bot_msg = "I didn't get a number from that, can you try again on a scale from 0 to 5?"
                                     set_convo_state(sender_id, State.WAITING_FOR_STUDY_EASINESS)
 
+                            elif (convo_state == State.WAITING_FOR_FACT_TO_DISPLAY):
+                                tmp_fact = get_fact(sender_msg.decode("unicode_escape"))
+                                if not tmp_fact:
+                                    bot_msg = "Whoops! We don't have a fact for you. Try viewing your facts to get the ID."
+                                else:
+                                    current_user.tmp_fact = tmp_fact
+                                    send_facts(sender_id, "Here's the fact.", [tmp_fact], True)
+                                set_convo_state(sender_id, State.DEFAULT)
+
                             elif (convo_state == State.WAITING_FOR_FACT_TO_CHANGE):
                                 tmp_fact = get_fact(sender_msg.decode("unicode_escape"))
                                 if not tmp_fact:
@@ -350,17 +392,18 @@ def handle_messages():
                                     current_user.tmp_fact = tmp_fact
                                     bot_msg = "Are you sure you want to delete this fact?\n"
                                     bot_msg += "Question: %s\n" % current_user.tmp_fact.question
-                                    bot_msg += "Answer: %s" % current_user.tmp_fact.answer
                                     state = State.CONFIRM_FACT_DELETE
                                 set_convo_state(sender_id, state)
 
                             elif (convo_state == State.CONFIRM_FACT_DELETE):
-                                confirmed = sender_msg.decode("unicode_escape").lower() in CONFIRMATIONS
-                                if confirmed and delete_fact(current_user.tmp_fact.id):
-                                    bot_msg = "Fact deleted successfully."
+                                confirmed = strongest_intent == "confirmation"
+                                if confirmed:
+                                    if delete_fact(current_user.tmp_fact.id):
+                                        bot_msg = "Fact deleted successfully."
+                                    else:
+                                        bot_msg = "Failed to delete fact."
                                 else:
-                                    bot_msg = "Failed to delete fact."
-
+                                    bot_msg = "Ok, I won't delete this fact."
                                 current_user.tmp_fact = Fact(user_id=current_user.user_id)
                                 set_convo_state(sender_id, State.DEFAULT)
 
@@ -390,7 +433,7 @@ def handle_messages():
                                     bot_msg = "Sorry, I couldn't get a duration from that."
                                 set_convo_state(sender_id, State.DEFAULT)
 
-                            send_message(sender_id, bot_msg, is_response=True)
+                            send_large_message(sender_id, bot_msg, is_response=True)
 
                         change_typing_indicator(enabled=False, user_id=sender_id)
         else:
@@ -408,11 +451,11 @@ def handle_messages():
 # ===============================================================================
 # Helper Routines
 # ===============================================================================
-def get_next_fact_to_study(user_id):
+def get_next_fact_to_study(sender_id):
     """
     Get the fact with the nearest next_due_date.
     """
-    facts = get_user_facts(user_id)
+    facts = get_user_facts(sender_id)
     fact_return = None
     if (facts):
         # Try/except block needed for now, since some facts don't have an initialized due date.
@@ -428,7 +471,6 @@ def get_next_fact_to_study(user_id):
 def update_next_fact_per_SM2_alg(user_id, perf_rating):
     assert ((perf_rating >= 0) and (perf_rating <= 5))
 
-    #TODO - easiness needs to be initialized to 2.5
     fact = get_next_fact_to_study(user_id)
 
     # Update consecutive correct answers.
@@ -479,12 +521,22 @@ def get_nlp_duration(nlp_entities, min_conf_threshold):
     if (nlp_entities.get('duration')):
         if(nlp_entities['duration'][0]['confidence'] > min_conf_threshold):
             return_val = nlp_entities['duration'][0]['normalized']['value']
+    elif (nlp_entities.get('datetime')):
+        if(nlp_entities['datetime'][0]['confidence'] > min_conf_threshold):
+            date_time = parse_date_time(nlp_entities['datetime'][0]['values'][0]['to']['value'])
+            return_val = date_time.timestamp()
 
     return(return_val)
 
 
 def restore_convo_state(sender_id):
-    user_data = cache.get(sender_id)
+    user_data = None
+    try:
+        user_data = cache.get(sender_id)
+    except Exception as e:
+        print("DEBUG: Cache not implemented")
+        print("DEBUG: %s" % str(e))
+
     if not user_data:
         print("DEBUG: Cache miss. Building convo state.")
         user_data = get_user(sender_id)
@@ -507,6 +559,10 @@ def restore_convo_state(sender_id):
 
 def set_convo_state(sender_id, new_state):
     global current_user
+    if not current_user:
+        print("DEBUG: New User Setup.")
+        user_data = get_user(sender_id)
+        current_user = ConvoState(user_data.id, State.DEFAULT)
     current_user.state = new_state
     set_user(current_user)
     print("DEBUG: Cache set.")
@@ -644,7 +700,6 @@ def get_user(user_id):
 def get_all_users():
     return User.query.all()
 
-
 def is_first_time_user(sender_id):
     print("DEBUG: Checking if user %s exists" % sender_id)
     current_user = get_user(sender_id)
@@ -663,6 +718,8 @@ def send_greeting_message(sender_id):
     from random import randint
     phrase = RANDOM_PHRASES[randint(0, len(RANDOM_PHRASES)-1)]
     msg = phrase % get_users_firstname(sender_id)
+    print("DEBUG: Sending greeting message: %s" % msg)
+
     send_message(sender_id, msg, is_response=True)
 
 
@@ -712,27 +769,53 @@ def update_fact(fact_id):
         db.session.commit()
     except Exception as e:
         print("ERROR: Failed to update fact %s" % current_user.tmp_fact)
-        print("ERROR: Reason: %s", str(e))
+        print("ERROR: Reason: %s" % str(e))
         success = False
     return success
 
+def get_fact(id):
+    if not isinstance(id, int):
+        id = parse_response_for_fact_id(id)
 
-def get_fact(fact_id):
     try:
-        fact_id = int(fact_id)
-        print("DEBUG: Getting fact with id: %d" % fact_id)
+        fact = get_fact_by_id(id)
     except:
-        print("DEBUG: Getting fact with question: %s" % fact_id)
-        fact_id = fact_id
-
-    global current_user
-    if isinstance(fact_id, int):
-        fact = Fact.query.filter_by(user_id=current_user.user_id, id=fact_id).one_or_none()
-    else:
-        fact = Fact.query.filter_by(user_id=current_user.user_id, question=fact_id).one_or_none()
+        fact = get_fact_by_question(id)
 
     print("DEBUG: Fact: %r" % fact)
     return fact
+
+def get_fact_by_id(fact_id):
+    global current_user
+    print("DEBUG: Getting fact by ID: %d" % fact_id)
+    try:
+        fact = Fact.query.filter_by(user_id=current_user.user_id, id=fact_id).one_or_none()
+        return fact
+    except Exception as e:
+        print("ERROR: Failed to retrieve fact: %s" % str(e))
+    return None
+
+
+def get_fact_by_question(question):
+    global current_user
+    print("DEBUG: Getting fact by Question: %s" % question)
+    try:
+        fact = Fact.query.filter_by(user_id=current_user.user_id, question=question).one_or_none()
+        return fact
+    except Exception as e:
+        print("ERROR: Failed to retrieve fact: %s" % str(e))
+    return None
+
+
+
+def parse_response_for_fact_id(fact_id_str):
+    try:
+        fact_id = extract_fact_id(fact_id_str)
+        if not fact_id:
+            raise Exception
+    except:
+        fact_id = fact_id_str
+    return fact_id
 
 
 def delete_fact(fact_id):
@@ -752,18 +835,32 @@ def get_user_facts(sender_id):
     return get_user(sender_id).facts
 
 
-def send_facts_for_display(sender_id, initial_bot_msg, include_metadata=False):
+def send_facts(sender_id, initial_bot_msg, facts, include_metadata=False):
     send_message(sender_id, initial_bot_msg, is_response=True)
-    for fact in get_user_facts(sender_id):
-        return_msg = "Id: %d\n" % fact.id
-        return_msg += "Question: %s\n" % fact.question
-        return_msg += "Answer: %s\n" % fact.answer
+    for fact in facts:
+        return_msg = "%d. %s\n" % (fact.id, fact.question)
         if include_metadata:
+            return_msg += "Answer: %s\n" % fact.answer
             return_msg += "Easiness: %s\n" % fact.easiness
             return_msg += "Consecutive Correct Answers: %s\n" % fact.consecutive_correct_answers
-            return_msg += "Next Study Time: %s\n" % fact.serialize_date_time('next_due_date')
-            return_msg += "Last Seen: %s\n\n" % fact.serialize_date_time('last_seen')
-        send_message(sender_id, return_msg, is_response=True)
+            return_msg += "Next Study Time: %s\n" % format_date_time(fact.next_due_date)
+            return_msg += "Last Seen: %s\n\n" % format_date_time(fact.last_seen)
+        send_large_message(sender_id, return_msg)
+
+
+def send_facts_for_display(sender_id, initial_bot_msg, include_metadata=False):
+    send_facts(sender_id, initial_bot_msg, get_user_facts(sender_id), include_metadata)
+
+
+def send_large_message(sender_id, return_string, is_response=True):
+    [send_message(sender_id, return_string[i: i + FB_MAX_MESSAGE_LENGTH], is_response)
+     for i in range(0, len(return_string), FB_MAX_MESSAGE_LENGTH)]
+
+
+def format_date_time(date_time):
+    if isinstance(date_time, datetime):
+        return "{:%B %d, %Y}".format(date_time)
+    return None
 
 
 def parse_date_time(date_time):
@@ -771,6 +868,12 @@ def parse_date_time(date_time):
         return parser.parse(date_time)
     return None
 
+
+def extract_fact_id(fact_id_str):
+    try:
+        return [int(s) for s in fact_id_str.split() if s.isdigit()][0]
+    except:
+        return None
 # ===============================================================================
 # Main
 # ===============================================================================
