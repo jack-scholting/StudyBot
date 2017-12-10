@@ -521,6 +521,10 @@ def get_nlp_duration(nlp_entities, min_conf_threshold):
     if (nlp_entities.get('duration')):
         if(nlp_entities['duration'][0]['confidence'] > min_conf_threshold):
             return_val = nlp_entities['duration'][0]['normalized']['value']
+    elif (nlp_entities.get('datetime')):
+        if(nlp_entities['datetime'][0]['confidence'] > min_conf_threshold):
+            date_time = parse_date_time(nlp_entities['datetime'][0]['values'][0]['to']['value'])
+            return_val = date_time.timestamp()
 
     return(return_val)
 
