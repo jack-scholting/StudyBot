@@ -34,12 +34,12 @@ RANDOM_PHRASES = [
 ]
 
 USAGE_INSTRUCTIONS = ("Below is a list of my primary functionality:\n" +
-    "- 'I want to add a fact.' " +
-    "- 'I want to view all facts.'" +
-    "- 'I want to change a fact.'" +
-    "- 'I want to delete a fact.'" +
-    "- 'I want to study.'" +
-    "- 'I want to silence studying for x days.'")
+    "- 'I want to add a fact.'\n" +
+    "- 'I want to view all facts.'\n" +
+    "- 'I want to change a fact.'\n" +
+    "- 'I want to delete a fact.'\n" +
+    "- 'I want to study.'\n" +
+    "- 'I want to silence studying for x days.'\n")
 
 """
 Note: This is a trade-off between "precision" and "recall" as discussed here:
@@ -337,7 +337,7 @@ def handle_messages():
                                             set_convo_state(sender_id, State.DEFAULT)
                                     elif (strongest_intent == "default_intent"):
                                         bot_msg = "I'm not sure what you mean."
-                                        bot_msg = bot_msg + USAGE_INSTRUCTIONS
+                                        bot_msg = bot_msg + " " + USAGE_INSTRUCTIONS
                                         set_convo_state(sender_id, current_user.state)
                             elif (strongest_intent == "abort"):
                                 bot_msg = "Ok, aborting that request."
@@ -715,7 +715,7 @@ def is_first_time_user(sender_id):
 def send_welcome_message(sender_id):
     firstname = get_users_firstname(sender_id)
     msg = "Hello "+firstname+", I'm StudyBot. Nice to meet you!"
-    msg = msg + USAGE_INSTRUCTIONS
+    msg = msg + " " + USAGE_INSTRUCTIONS
     send_message(sender_id, msg, is_response=True)
 
 
