@@ -296,7 +296,11 @@ def handle_messages():
                                             bot_msg = "Ok, how long do you want to silence notifications for?"
                                             set_convo_state(sender_id, State.EXPECTING_DURATION_FOR_SILENCE)
                                     elif (strongest_intent == "view_facts"):
-                                        send_facts_for_display(sender_id, "Ok, here are the facts we have.")
+                                        user = get_user(sender_id)
+                                        if user and len(user.facts) == 0:
+                                            bot_msg = "Whoops! We don't have any facts for you try adding a new fact."
+                                        else:
+                                            send_facts_for_display(sender_id, "Ok, here are the facts we have.")
                                     elif (strongest_intent == "view_detailed_fact"):
                                         fact_id = extract_fact_id(sender_msg.decode("unicode_escape"))
                                         state = State.EXPECTING_FACT_ID_FOR_DISPLAY
@@ -324,7 +328,7 @@ def handle_messages():
                                                 bot_msg = "Whoops! We don't have a fact for you. Try viewing your facts to get the ID."
                                                 state = State.DEFAULT
                                         else:
-                                            bot_msg = "Ok, which fact do you to delete?"
+                                            bot_msg = "Ok, which fact do you want to delete?"
                                         set_convo_state(sender_id, state)
                                     elif (strongest_intent == "study_next_fact"):
                                         fact = get_next_fact_to_study(sender_id)
@@ -384,7 +388,7 @@ def handle_messages():
                                     state = State.DEFAULT
                                 else:
                                     current_user.tmp_fact = tmp_fact
-                                    bot_msg = "Ok, let's update that new fact. What is the question?"
+                                    bot_msg = "Ok, let's update that fact. What is the question?"
                                     state = State.EXPECTING_FACT_QUESTION
                                 set_convo_state(sender_id, state)
 
